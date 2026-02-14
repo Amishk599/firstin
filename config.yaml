@@ -1,0 +1,30 @@
+polling_interval: 5m
+
+companies:
+  - name: stripe
+    ats: greenhouse
+    board_token: "stripe"
+    enabled: true
+
+  - name: vercel
+    ats: greenhouse
+    board_token: "vercel"
+    enabled: true
+
+  - name: notion
+    ats: greenhouse
+    board_token: "notion"
+    enabled: true
+
+filters:
+  title_keywords:
+    - software engineer
+    - backend
+    - fullstack
+    - sde
+    - platform
+    - infrastructure
+  locations:
+    - United States
+    - US
+    - Remote
