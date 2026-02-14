@@ -24,6 +24,7 @@ func main() {
 	configPath := flag.String("config", "config.yaml", "path to config file")
 	debug := flag.Bool("debug", false, "enable debug logging")
 	dryRun := flag.Bool("dry-run", false, "poll once, print matches, do not mark as seen, then exit")
+	testSlack := flag.Bool("test-slack", false, "send a test message to Slack and exit")
 	flag.Parse()
 
 	logLevel := slog.LevelInfo
@@ -60,14 +61,34 @@ func main() {
 		jobStore = sqlStore
 	}
 
-	logNotifier := notifier.NewLogNotifier(logger)
-
 	jobFilter := filter.NewTitleAndLocationFilter(
 		cfg.Filters.TitleKeywords,
 		cfg.Filters.Locations,
 	)
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
+
+	var n model.Notifier
+	switch cfg.Notification.Type {
+	case "slack":
+		n = notifier.NewSlackNotifier(cfg.Notification.WebhookURL, httpClient, logger)
+		logger.Info("using slack notifier")
+	default:
+		n = notifier.NewLogNotifier(logger)
+	}
+
+	if *testSlack {
+		if cfg.Notification.Type != "slack" {
+			logger.Error("--test-slack requires notification.type to be \"slack\" in config")
+			os.Exit(1)
+		}
+		if err := notifier.SendTestMessage(n); err != nil {
+			logger.Error("test slack message failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("test slack message sent successfully")
+		return
+	}
 
 	var pollers []*poller.CompanyPoller
 	for _, company := range cfg.Companies {
@@ -78,7 +99,7 @@ func main() {
 		switch company.ATS {
 		case "greenhouse":
 			fetcher := adapter.NewGreenhouseAdapter(company.BoardToken, company.Name, httpClient)
-			p := poller.NewCompanyPoller(company.Name, fetcher, jobFilter, jobStore, logNotifier, logger)
+			p := poller.NewCompanyPoller(company.Name, fetcher, jobFilter, jobStore, n, logger)
 			pollers = append(pollers, p)
 			logger.Info("registered company", "name", company.Name, "ats", company.ATS)
 		default:

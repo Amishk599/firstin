@@ -18,6 +18,9 @@ run-debug:
 dry-run:
     go run ./cmd/firstin/ -dry-run
 
+test-slack:
+    go run ./cmd/firstin/ -test-slack
+
 lint:
     go vet ./...
 

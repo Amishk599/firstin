@@ -13,6 +13,13 @@ type Config struct {
 	PollingInterval time.Duration
 	Companies       []CompanyConfig
 	Filters         FilterConfig
+	Notification    NotificationConfig
+}
+
+// NotificationConfig controls which notifier is used and its settings.
+type NotificationConfig struct {
+	Type       string `yaml:"type"`        // "log" or "slack"
+	WebhookURL string `yaml:"webhook_url"` // required if type is "slack"
 }
 
 // CompanyConfig describes a single company board to poll.
@@ -31,9 +38,10 @@ type FilterConfig struct {
 
 // rawConfig is used for YAML unmarshaling (snake_case fields and duration as string).
 type rawConfig struct {
-	PollingInterval string          `yaml:"polling_interval"`
-	Companies       []CompanyConfig `yaml:"companies"`
-	Filters         rawFilterConfig `yaml:"filters"`
+	PollingInterval string             `yaml:"polling_interval"`
+	Companies       []CompanyConfig    `yaml:"companies"`
+	Filters         rawFilterConfig    `yaml:"filters"`
+	Notification    NotificationConfig `yaml:"notification"`
 }
 
 type rawFilterConfig struct {
@@ -65,6 +73,7 @@ func Load(path string) (*Config, error) {
 			TitleKeywords: raw.Filters.TitleKeywords,
 			Locations:     raw.Filters.Locations,
 		},
+		Notification: raw.Notification,
 	}
 
 	if err := validate(cfg); err != nil {
@@ -87,5 +96,16 @@ func validate(cfg *Config) error {
 	if enabled == 0 {
 		return fmt.Errorf("at least one company must be enabled")
 	}
+
+	if cfg.Notification.Type == "slack" {
+		if cfg.Notification.WebhookURL == "" {
+			return fmt.Errorf("notification.webhook_url is required when type is \"slack\"")
+		}
+		if len(cfg.Notification.WebhookURL) < len("https://hooks.slack.com/") ||
+			cfg.Notification.WebhookURL[:len("https://hooks.slack.com/")] != "https://hooks.slack.com/" {
+			return fmt.Errorf("notification.webhook_url must start with https://hooks.slack.com/")
+		}
+	}
+
 	return nil
 }
