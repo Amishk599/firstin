@@ -27,6 +27,7 @@ type JobStore interface {
 	HasSeen(jobID string) (bool, error)
 	MarkSeen(jobID string) error
 	Cleanup(olderThan time.Duration) error
+	IsEmpty() (bool, error)
 }
 
 // Notifier sends notifications for new job matches.

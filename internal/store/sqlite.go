@@ -71,6 +71,16 @@ func (s *SQLiteStore) Cleanup(olderThan time.Duration) error {
 	return nil
 }
 
+// IsEmpty returns true if the seen_jobs table has no entries.
+func (s *SQLiteStore) IsEmpty() (bool, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM seen_jobs").Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("checking if store is empty: %w", err)
+	}
+	return count == 0, nil
+}
+
 // Close closes the underlying database connection.
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()

@@ -43,6 +43,10 @@ func (s *InMemoryStore) MarkSeen(jobID string) error {
 
 func (s *InMemoryStore) Cleanup(_ time.Duration) error { return nil }
 
+func (s *InMemoryStore) IsEmpty() (bool, error) {
+	return len(s.seen) == 0, nil
+}
+
 // RecordingNotifier records which jobs were sent to Notify.
 type RecordingNotifier struct {
 	Notified []model.Job
@@ -84,7 +88,18 @@ func makeJobs(ids ...string) []model.Job {
 	return jobs
 }
 
-// --- Tests (max 5) ---
+// --- Helpers ---
+
+func timePtr(t time.Time) *time.Time { return &t }
+
+// nonEmptyStore returns a store with a dummy entry so it is not treated as a first run.
+func nonEmptyStore() *InMemoryStore {
+	s := NewInMemoryStore()
+	s.MarkSeen("__seed__")
+	return s
+}
+
+// --- Tests (max 7) ---
 
 func TestPoll_FilterAndDedup(t *testing.T) {
 	// 5 fetched, filter accepts all, store has seen "2" → notifier gets 4, store marks 4.
@@ -168,7 +183,7 @@ func TestPoll_FilterRejectsAll(t *testing.T) {
 		"testco",
 		&MockFetcher{Jobs: makeJobs("1", "2", "3")},
 		&RejectAllFilter{},
-		NewInMemoryStore(),
+		nonEmptyStore(),
 		notifier,
 		discardLogger(),
 	)
@@ -179,5 +194,92 @@ func TestPoll_FilterRejectsAll(t *testing.T) {
 
 	if len(notifier.Notified) != 0 {
 		t.Error("notifier should not be called when filter rejects all")
+	}
+}
+
+func TestPoll_FreshnessSkipsOldJobs(t *testing.T) {
+	twoHoursAgo := timePtr(time.Now().Add(-2 * time.Hour))
+	fiveMinAgo := timePtr(time.Now().Add(-5 * time.Minute))
+
+	jobs := []model.Job{
+		{ID: "old", Company: "testco", Title: "Software Engineer", Location: "US", PostedAt: twoHoursAgo, Source: "test"},
+		{ID: "fresh", Company: "testco", Title: "Software Engineer", Location: "US", PostedAt: fiveMinAgo, Source: "test"},
+	}
+
+	notifier := &RecordingNotifier{}
+	poller := NewCompanyPoller(
+		"testco",
+		&MockFetcher{Jobs: jobs},
+		&AcceptAllFilter{},
+		nonEmptyStore(),
+		notifier,
+		discardLogger(),
+	)
+
+	if err := poller.Poll(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(notifier.Notified) != 1 {
+		t.Fatalf("notified = %d, want 1", len(notifier.Notified))
+	}
+	if notifier.Notified[0].ID != "fresh" {
+		t.Errorf("notified job ID = %s, want fresh", notifier.Notified[0].ID)
+	}
+}
+
+func TestPoll_NilPostedAtPassesThrough(t *testing.T) {
+	jobs := []model.Job{
+		{ID: "no-ts", Company: "testco", Title: "Software Engineer", Location: "US", PostedAt: nil, Source: "test"},
+	}
+
+	notifier := &RecordingNotifier{}
+	poller := NewCompanyPoller(
+		"testco",
+		&MockFetcher{Jobs: jobs},
+		&AcceptAllFilter{},
+		nonEmptyStore(),
+		notifier,
+		discardLogger(),
+	)
+
+	if err := poller.Poll(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(notifier.Notified) != 1 {
+		t.Fatalf("notified = %d, want 1", len(notifier.Notified))
+	}
+	if notifier.Notified[0].ID != "no-ts" {
+		t.Errorf("notified job ID = %s, want no-ts", notifier.Notified[0].ID)
+	}
+}
+
+func TestPoll_FirstRunSeedsWithoutNotifying(t *testing.T) {
+	store := NewInMemoryStore() // empty = first run
+
+	notifier := &RecordingNotifier{}
+	poller := NewCompanyPoller(
+		"testco",
+		&MockFetcher{Jobs: makeJobs("1", "2", "3")},
+		&AcceptAllFilter{},
+		store,
+		notifier,
+		discardLogger(),
+	)
+
+	if err := poller.Poll(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(notifier.Notified) != 0 {
+		t.Error("notifier should not be called on first run (seeding)")
+	}
+
+	// All jobs should be marked seen for next run.
+	for _, id := range []string{"1", "2", "3"} {
+		if seen, _ := store.HasSeen(id); !seen {
+			t.Errorf("job %s should be marked seen after seeding", id)
+		}
 	}
 }

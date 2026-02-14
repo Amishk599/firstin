@@ -35,9 +35,10 @@ func (f *ErrorFetcher) FetchJobs(_ context.Context) ([]model.Job, error) {
 
 type NoOpStore struct{}
 
-func (s *NoOpStore) HasSeen(_ string) (bool, error)      { return false, nil }
-func (s *NoOpStore) MarkSeen(_ string) error              { return nil }
-func (s *NoOpStore) Cleanup(_ time.Duration) error        { return nil }
+func (s *NoOpStore) HasSeen(_ string) (bool, error) { return false, nil }
+func (s *NoOpStore) MarkSeen(_ string) error         { return nil }
+func (s *NoOpStore) Cleanup(_ time.Duration) error   { return nil }
+func (s *NoOpStore) IsEmpty() (bool, error)          { return false, nil }
 
 type NoOpNotifier struct{}
 

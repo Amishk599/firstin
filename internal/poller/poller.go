@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/amishk599/firstin/internal/model"
 )
@@ -38,18 +39,32 @@ func NewCompanyPoller(
 	}
 }
 
-// Poll runs one poll cycle: fetch jobs, filter, dedup, notify, and mark seen.
+// Poll runs one poll cycle: fetch → filter → freshness → dedup → notify → mark seen.
+// On the very first run (empty store), jobs are seeded as seen without notifying.
 func (p *CompanyPoller) Poll(ctx context.Context) error {
+	firstRun, err := p.store.IsEmpty()
+	if err != nil {
+		return fmt.Errorf("polling %s: checking if first run: %w", p.Name, err)
+	}
+
 	jobs, err := p.fetcher.FetchJobs(ctx)
 	if err != nil {
 		return fmt.Errorf("polling %s: %w", p.Name, err)
 	}
 
+	now := time.Now()
+
 	var matched []model.Job
 	for _, job := range jobs {
-		if p.filter.Match(job) {
-			matched = append(matched, job)
+		if !p.filter.Match(job) {
+			continue
 		}
+		// Freshness check: skip jobs posted more than 1 hour ago.
+		// Jobs with nil PostedAt pass through (rely on dedup).
+		if job.PostedAt != nil && job.PostedAt.Before(now.Add(-1*time.Hour)) {
+			continue
+		}
+		matched = append(matched, job)
 	}
 
 	var newJobs []model.Job
@@ -61,6 +76,20 @@ func (p *CompanyPoller) Poll(ctx context.Context) error {
 		if !seen {
 			newJobs = append(newJobs, job)
 		}
+	}
+
+	// First-run suppression: seed the store without notifying.
+	if firstRun {
+		for _, job := range newJobs {
+			if err := p.store.MarkSeen(job.ID); err != nil {
+				return fmt.Errorf("polling %s: seeding seen: %w", p.Name, err)
+			}
+		}
+		p.logger.Info("initial seed: marked existing jobs as seen",
+			"company", p.Name,
+			"seeded", len(newJobs),
+		)
+		return nil
 	}
 
 	if len(newJobs) > 0 {
