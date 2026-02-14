@@ -52,20 +52,37 @@ func (p *CompanyPoller) Poll(ctx context.Context) error {
 		return fmt.Errorf("polling %s: %w", p.Name, err)
 	}
 
+	p.logger.Debug("fetched jobs from API",
+		"company", p.Name,
+		"total", len(jobs),
+	)
+
 	now := time.Now()
 
 	var matched []model.Job
+	var filteredOut, staleOut int
 	for _, job := range jobs {
 		if !p.filter.Match(job) {
+			filteredOut++
 			continue
 		}
 		// Freshness check: skip jobs posted more than 1 hour ago.
-		// Jobs with nil PostedAt pass through (rely on dedup).
-		if job.PostedAt != nil && job.PostedAt.Before(now.Add(-1*time.Hour)) {
+		// Skip on first run — we need to seed all matching jobs so future
+		// polls can detect new ones by comparison.
+		if !firstRun && job.PostedAt != nil && job.PostedAt.Before(now.Add(-1*time.Hour)) {
+			staleOut++
 			continue
 		}
 		matched = append(matched, job)
 	}
+
+	p.logger.Debug("filter pipeline results",
+		"company", p.Name,
+		"fetched", len(jobs),
+		"filtered_out", filteredOut,
+		"stale_out", staleOut,
+		"matched", len(matched),
+	)
 
 	var newJobs []model.Job
 	for _, job := range matched {

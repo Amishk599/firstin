@@ -1,26 +1,21 @@
 polling_interval: 5m
 
 companies:
-  - name: stripe
+  - name: postman
     ats: greenhouse
-    board_token: "stripe"
+    board_token: "postman"
     enabled: true
 
-  - name: vercel
+  - name: glean
     ats: greenhouse
-    board_token: "vercel"
+    board_token: "gleanwork"
     enabled: true
 
-  - name: notion
-    ats: greenhouse
-    board_token: "notion"
-    enabled: true
 
 filters:
   title_keywords:
     - software engineer
     - backend
-    - fullstack
     - sde
     - platform
     - infrastructure
@@ -28,3 +23,7 @@ filters:
     - United States
     - US
     - Remote
+    - San Francisco
+    - CA
+    - New York
+    - San Jose

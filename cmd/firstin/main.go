@@ -21,9 +21,14 @@ import (
 
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to config file")
+	debug := flag.Bool("debug", false, "enable debug logging")
 	flag.Parse()
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logLevel := slog.LevelInfo
+	if *debug {
+		logLevel = slog.LevelDebug
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {

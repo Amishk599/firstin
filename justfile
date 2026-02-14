@@ -9,6 +9,9 @@ test:
 run:
     go run ./cmd/firstin/
 
+run-debug:
+    go run ./cmd/firstin/ -debug
+
 lint:
     go vet ./...
 
