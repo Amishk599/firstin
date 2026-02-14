@@ -14,6 +14,12 @@ type Config struct {
 	Companies       []CompanyConfig
 	Filters         FilterConfig
 	Notification    NotificationConfig
+	RateLimit       RateLimitConfig
+}
+
+// RateLimitConfig controls ATS-level rate limiting.
+type RateLimitConfig struct {
+	MinDelay time.Duration // minimum gap between requests to the same ATS
 }
 
 // NotificationConfig controls which notifier is used and its settings.
@@ -42,6 +48,11 @@ type rawConfig struct {
 	Companies       []CompanyConfig    `yaml:"companies"`
 	Filters         rawFilterConfig    `yaml:"filters"`
 	Notification    NotificationConfig `yaml:"notification"`
+	RateLimit       rawRateLimitConfig `yaml:"rate_limit"`
+}
+
+type rawRateLimitConfig struct {
+	MinDelay string `yaml:"min_delay"`
 }
 
 type rawFilterConfig struct {
@@ -66,6 +77,14 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parse polling_interval %q: %w", raw.PollingInterval, err)
 	}
 
+	rateLimitDelay := 600 * time.Second // default: 5 mins
+	if raw.RateLimit.MinDelay != "" {
+		rateLimitDelay, err = time.ParseDuration(raw.RateLimit.MinDelay)
+		if err != nil {
+			return nil, fmt.Errorf("parse rate_limit.min_delay %q: %w", raw.RateLimit.MinDelay, err)
+		}
+	}
+
 	cfg := &Config{
 		PollingInterval: interval,
 		Companies:       raw.Companies,
@@ -74,6 +93,9 @@ func Load(path string) (*Config, error) {
 			Locations:     raw.Filters.Locations,
 		},
 		Notification: raw.Notification,
+		RateLimit: RateLimitConfig{
+			MinDelay: rateLimitDelay,
+		},
 	}
 
 	if err := validate(cfg); err != nil {

@@ -16,6 +16,7 @@ import (
 	"github.com/amishk599/firstin/internal/model"
 	"github.com/amishk599/firstin/internal/notifier"
 	"github.com/amishk599/firstin/internal/poller"
+	"github.com/amishk599/firstin/internal/ratelimit"
 	"github.com/amishk599/firstin/internal/scheduler"
 	"github.com/amishk599/firstin/internal/store"
 )
@@ -90,21 +91,31 @@ func main() {
 		return
 	}
 
+	// Shared ATS-level rate limiter - all companies on the same ATS share this instance.
+	limiter := ratelimit.NewATSRateLimiter(cfg.RateLimit.MinDelay)
+	logger.Info("rate limiter configured", "min_delay", cfg.RateLimit.MinDelay.String())
+
 	var pollers []*poller.CompanyPoller
 	for _, company := range cfg.Companies {
 		if !company.Enabled {
 			continue
 		}
 
+		var fetcher model.JobFetcher
 		switch company.ATS {
 		case "greenhouse":
-			fetcher := adapter.NewGreenhouseAdapter(company.BoardToken, company.Name, httpClient)
-			p := poller.NewCompanyPoller(company.Name, fetcher, jobFilter, jobStore, n, logger)
-			pollers = append(pollers, p)
-			logger.Info("registered company", "name", company.Name, "ats", company.ATS)
+			fetcher = adapter.NewGreenhouseAdapter(company.BoardToken, company.Name, httpClient)
 		default:
 			logger.Warn("unsupported ATS, skipping", "company", company.Name, "ats", company.ATS)
+			continue
 		}
+
+		// Wrap with ATS-level rate limiting
+		fetcher = ratelimit.NewRateLimitedFetcher(fetcher, limiter, company.ATS)
+
+		p := poller.NewCompanyPoller(company.Name, fetcher, jobFilter, jobStore, n, logger)
+		pollers = append(pollers, p)
+		logger.Info("registered company", "name", company.Name, "ats", company.ATS)
 	}
 
 	if len(pollers) == 0 {

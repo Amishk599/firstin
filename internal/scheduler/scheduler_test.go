@@ -134,8 +134,8 @@ func TestRun_OnePollerErrorOthersStillRun(t *testing.T) {
 		done <- s.Run(ctx)
 	}()
 
-	// Wait for the immediate cycle to complete (includes 1s inter-company sleep).
-	time.Sleep(1500 * time.Millisecond)
+	// Wait for the immediate cycle to complete.
+	time.Sleep(200 * time.Millisecond)
 	cancel()
 	<-done
 

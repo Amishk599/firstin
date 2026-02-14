@@ -50,9 +50,11 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	}
 }
 
-// pollAll runs Poll on each poller sequentially with a small pause between companies.
+// pollAll runs Poll on each poller sequentially.
+// Rate limiting between requests to the same ATS is handled by the
+// RateLimitedFetcher decorator
 func (s *Scheduler) pollAll(ctx context.Context) {
-	for i, p := range s.pollers {
+	for _, p := range s.pollers {
 		if ctx.Err() != nil {
 			return
 		}
@@ -62,15 +64,6 @@ func (s *Scheduler) pollAll(ctx context.Context) {
 				"company", p.Name,
 				"error", err,
 			)
-		}
-
-		// Small sleep between companies to be polite, except after the last one.
-		if i < len(s.pollers)-1 {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(1 * time.Second):
-			}
 		}
 	}
 }
