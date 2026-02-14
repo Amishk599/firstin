@@ -33,14 +33,18 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	)
 
 	// Run one immediate poll cycle.
+	cycle := 1
+	s.logger.Info("starting poll cycle", "cycle", cycle)
 	s.pollAll(ctx)
 
 	for {
 		select {
 		case <-ctx.Done():
-			s.logger.Info("shutting down scheduler")
+			s.logger.Info("shutting down scheduler", "completed_cycles", cycle)
 			return nil
 		case <-time.After(s.interval):
+			cycle++
+			s.logger.Info("starting poll cycle", "cycle", cycle)
 			s.pollAll(ctx)
 		}
 	}

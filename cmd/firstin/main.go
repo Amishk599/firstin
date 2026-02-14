@@ -13,6 +13,7 @@ import (
 	"github.com/amishk599/firstin/internal/adapter"
 	"github.com/amishk599/firstin/internal/config"
 	"github.com/amishk599/firstin/internal/filter"
+	"github.com/amishk599/firstin/internal/model"
 	"github.com/amishk599/firstin/internal/notifier"
 	"github.com/amishk599/firstin/internal/poller"
 	"github.com/amishk599/firstin/internal/scheduler"
@@ -22,6 +23,7 @@ import (
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to config file")
 	debug := flag.Bool("debug", false, "enable debug logging")
+	dryRun := flag.Bool("dry-run", false, "poll once, print matches, do not mark as seen, then exit")
 	flag.Parse()
 
 	logLevel := slog.LevelInfo
@@ -43,12 +45,20 @@ func main() {
 		"locations", cfg.Filters.Locations,
 	)
 
-	jobStore, err := store.NewSQLiteStore("jobs.db")
-	if err != nil {
-		logger.Error("failed to open store", "error", err)
-		os.Exit(1)
+	// In dry-run mode, use a NopStore so nothing is persisted.
+	var jobStore model.JobStore
+	if *dryRun {
+		logger.Info("dry-run mode enabled, no jobs will be marked as seen")
+		jobStore = store.NewNopStore()
+	} else {
+		sqlStore, err := store.NewSQLiteStore("jobs.db")
+		if err != nil {
+			logger.Error("failed to open store", "error", err)
+			os.Exit(1)
+		}
+		defer sqlStore.Close()
+		jobStore = sqlStore
 	}
-	defer jobStore.Close()
 
 	logNotifier := notifier.NewLogNotifier(logger)
 
@@ -83,6 +93,17 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// In dry-run mode, poll each company once and exit.
+	if *dryRun {
+		for _, p := range pollers {
+			if err := p.Poll(ctx); err != nil {
+				logger.Error("poll failed", "company", p.Name, "error", err)
+			}
+		}
+		logger.Info("dry-run complete")
+		return
+	}
 
 	sched := scheduler.NewScheduler(pollers, cfg.PollingInterval, logger)
 	if err := sched.Run(ctx); err != nil {

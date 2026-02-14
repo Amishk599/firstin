@@ -1,5 +1,8 @@
 # FirstIn — task runner (just)
 
+default:
+    @just --list
+
 build:
     go build -o firstin ./cmd/firstin/
 
@@ -11,6 +14,9 @@ run:
 
 run-debug:
     go run ./cmd/firstin/ -debug
+
+dry-run:
+    go run ./cmd/firstin/ -dry-run
 
 lint:
     go vet ./...
