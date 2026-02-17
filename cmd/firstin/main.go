@@ -138,6 +138,8 @@ func createFetcher(company config.CompanyConfig, httpClient *http.Client, logger
 		return adapter.NewGreenhouseAdapter(company.BoardToken, company.Name, httpClient), true
 	case "ashby":
 		return adapter.NewAshbyAdapter(company.BoardToken, company.Name, httpClient), true
+	// case "lever":
+	// 	return adapter.NewLeverAdapter(company.BoardToken, company.Name, httpClient), true
 	default:
 		logger.Warn("unsupported ATS, skipping", "company", company.Name, "ats", company.ATS)
 		return nil, false
