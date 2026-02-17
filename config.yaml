@@ -14,7 +14,7 @@ companies:
 # Type:log, slack (slack webhook url is required)
 notification:
   type: slack
-  webhook_url: "https://hooks.slack.com/services/T.../B.../xxx"
+  webhook_url: "${SLACK_WEBHOOK_URL}"
 
 filters:
   title_keywords:
