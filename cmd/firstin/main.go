@@ -105,6 +105,8 @@ func main() {
 		switch company.ATS {
 		case "greenhouse":
 			fetcher = adapter.NewGreenhouseAdapter(company.BoardToken, company.Name, httpClient)
+		case "ashby":
+			fetcher = adapter.NewAshbyAdapter(company.BoardToken, company.Name, httpClient)
 		default:
 			logger.Warn("unsupported ATS, skipping", "company", company.Name, "ats", company.ATS)
 			continue

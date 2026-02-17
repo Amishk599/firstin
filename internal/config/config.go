@@ -67,8 +67,11 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 
+	// Expand environment variables
+	expanded := os.ExpandEnv(string(data))
+
 	var raw rawConfig
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	if err := yaml.Unmarshal([]byte(expanded), &raw); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 

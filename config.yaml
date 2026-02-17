@@ -1,20 +1,13 @@
 polling_interval: 5m
 
 rate_limit:
-  min_delay: 900s  # minimum gap between requests to the same ATS
+  # minimum gap between requests to the same ATS
+  min_delay: 900s # 15 mins
 
-companies:
-  - name: postman
-    ats: greenhouse
-    board_token: "postman"
-    enabled: true
-
-
-# Notification settings: 
-# Type:log, slack (slack webhook url is required)
+# Notification settings (options: log, slack)
 notification:
   type: slack
-  webhook_url: "${SLACK_WEBHOOK_URL}"
+  webhook_url: "${SLACK_WEBHOOK_URL}" # injected from GitHub secrets
 
 filters:
   title_keywords:
@@ -31,3 +24,14 @@ filters:
     - CA
     - New York
     - San Jose
+
+companies:
+  - name: postman
+    ats: greenhouse
+    board_token: "postman"
+    enabled: true
+
+  - name: cohere
+    ats: ashby
+    board_token: "cohere"
+    enabled: true
