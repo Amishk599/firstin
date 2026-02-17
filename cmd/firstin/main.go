@@ -169,7 +169,14 @@ func buildPollers(cfg *config.Config, jobFilter model.JobFilter, jobStore model.
 }
 
 func runDryRun(ctx context.Context, pollers []*poller.CompanyPoller, logger *slog.Logger) {
+	// Poll only one company per ATS
+	seen := make(map[string]bool)
 	for _, p := range pollers {
+		if seen[p.ATS] {
+			logger.Info("skipping (ATS already tested)", "company", p.Name, "ats", p.ATS)
+			continue
+		}
+		seen[p.ATS] = true
 		if err := p.Poll(ctx); err != nil {
 			logger.Error("poll failed", "company", p.Name, "error", err)
 		}
