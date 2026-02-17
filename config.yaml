@@ -26,12 +26,32 @@ filters:
     - San Jose
 
 companies:
-  - name: postman
+  - name: anthropic
     ats: greenhouse
-    board_token: "postman"
+    board_token: "anthropic"
+    enabled: true
+
+  - name: chime
+    ats: greenhouse
+    board_token: "chime"
     enabled: true
 
   - name: cohere
     ats: ashby
     board_token: "cohere"
+    enabled: true
+
+  - name: openai
+    ats: ashby
+    board_token: "openai"
+    enabled: true
+
+  - name: postman
+    ats: greenhouse
+    board_token: "postman"
+    enabled: true
+
+  - name: stripe
+    ats: greenhouse
+    board_token: "stripe"
     enabled: true
