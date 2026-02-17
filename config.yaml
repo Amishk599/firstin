@@ -1,8 +1,8 @@
-polling_interval: 5m
+polling_interval: 10m
 
 rate_limit:
   # minimum gap between requests to the same ATS
-  min_delay: 900s # 15 mins
+  min_delay: 720s # 12 mins
 
 # Notification settings (options: log, slack)
 notification:

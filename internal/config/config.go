@@ -11,10 +11,10 @@ import (
 // Config is the root configuration for the FirstIn poller.
 type Config struct {
 	PollingInterval time.Duration
-	Companies       []CompanyConfig
-	Filters         FilterConfig
-	Notification    NotificationConfig
-	RateLimit       RateLimitConfig
+	Companies      []CompanyConfig
+	Filters        FilterConfig
+	Notification   NotificationConfig
+	RateLimit      RateLimitConfig
 }
 
 // RateLimitConfig controls ATS-level rate limiting.
@@ -104,7 +104,7 @@ func Load(path string) (*Config, error) {
 
 	cfg := &Config{
 		PollingInterval: interval,
-		Companies:       raw.Companies,
+		Companies: raw.Companies,
 		Filters: FilterConfig{
 			TitleKeywords:        raw.Filters.TitleKeywords,
 			TitleExcludeKeywords: raw.Filters.TitleExcludeKeywords,

@@ -109,6 +109,7 @@ func TestPoll_FilterAndDedup(t *testing.T) {
 	notifier := &RecordingNotifier{}
 	poller := NewCompanyPoller(
 		"testco",
+		"greenhouse",
 		&MockFetcher{Jobs: makeJobs("1", "2", "3", "4", "5")},
 		&AcceptAllFilter{},
 		store,
@@ -137,6 +138,7 @@ func TestPoll_FetchError(t *testing.T) {
 	notifier := &RecordingNotifier{}
 	poller := NewCompanyPoller(
 		"failco",
+		"greenhouse",
 		&MockFetcher{Err: errors.New("network down")},
 		&AcceptAllFilter{},
 		NewInMemoryStore(),
@@ -163,6 +165,7 @@ func TestPoll_AllAlreadySeen(t *testing.T) {
 	notifier := &RecordingNotifier{}
 	poller := NewCompanyPoller(
 		"testco",
+		"greenhouse",
 		&MockFetcher{Jobs: makeJobs("1", "2")},
 		&AcceptAllFilter{},
 		store,
@@ -184,6 +187,7 @@ func TestPoll_FilterRejectsAll(t *testing.T) {
 	notifier := &RecordingNotifier{}
 	poller := NewCompanyPoller(
 		"testco",
+		"greenhouse",
 		&MockFetcher{Jobs: makeJobs("1", "2", "3")},
 		&RejectAllFilter{},
 		nonEmptyStore(),
@@ -213,6 +217,7 @@ func TestPoll_FreshnessSkipsOldJobs(t *testing.T) {
 	notifier := &RecordingNotifier{}
 	poller := NewCompanyPoller(
 		"testco",
+		"greenhouse",
 		&MockFetcher{Jobs: jobs},
 		&AcceptAllFilter{},
 		nonEmptyStore(),
@@ -241,6 +246,7 @@ func TestPoll_NilPostedAtPassesThrough(t *testing.T) {
 	notifier := &RecordingNotifier{}
 	poller := NewCompanyPoller(
 		"testco",
+		"greenhouse",
 		&MockFetcher{Jobs: jobs},
 		&AcceptAllFilter{},
 		nonEmptyStore(),
@@ -267,6 +273,7 @@ func TestPoll_FirstRunSeedsWithoutNotifying(t *testing.T) {
 	notifier := &RecordingNotifier{}
 	poller := NewCompanyPoller(
 		"testco",
+		"greenhouse",
 		&MockFetcher{Jobs: makeJobs("1", "2", "3")},
 		&AcceptAllFilter{},
 		store,

@@ -13,6 +13,7 @@ import (
 // fetch → filter → dedup → notify → mark seen.
 type CompanyPoller struct {
 	Name     string
+	ATS      string
 	fetcher  model.JobFetcher
 	filter   model.JobFilter
 	store    model.JobStore
@@ -24,6 +25,7 @@ type CompanyPoller struct {
 // NewCompanyPoller creates a poller wired with all its dependencies.
 func NewCompanyPoller(
 	name string,
+	ats string,
 	fetcher model.JobFetcher,
 	filter model.JobFilter,
 	store model.JobStore,
@@ -33,6 +35,7 @@ func NewCompanyPoller(
 ) *CompanyPoller {
 	return &CompanyPoller{
 		Name:     name,
+		ATS:      ats,
 		fetcher:  fetcher,
 		filter:   filter,
 		store:    store,
@@ -125,6 +128,7 @@ func (p *CompanyPoller) Poll(ctx context.Context) error {
 	}
 
 	p.logger.Info("polled company",
+		"ats", p.ATS,
 		"company", p.Name,
 		"fetched", len(jobs),
 		"matched", len(matched),

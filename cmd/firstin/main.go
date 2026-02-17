@@ -18,7 +18,6 @@ import (
 	"github.com/amishk599/firstin/internal/model"
 	"github.com/amishk599/firstin/internal/notifier"
 	"github.com/amishk599/firstin/internal/poller"
-	"github.com/amishk599/firstin/internal/ratelimit"
 	"github.com/amishk599/firstin/internal/retry"
 	"github.com/amishk599/firstin/internal/scheduler"
 	"github.com/amishk599/firstin/internal/store"
@@ -92,7 +91,7 @@ func main() {
 		return
 	}
 
-	sched := scheduler.NewScheduler(pollers, cfg.PollingInterval, logger)
+	sched := scheduler.NewScheduler(pollers, cfg.PollingInterval, cfg.RateLimit.MinDelay, logger)
 	if err := sched.Run(ctx); err != nil {
 		logger.Error("scheduler error", "error", err)
 		os.Exit(1)
@@ -146,8 +145,7 @@ func createFetcher(company config.CompanyConfig, httpClient *http.Client, logger
 }
 
 func buildPollers(cfg *config.Config, jobFilter model.JobFilter, jobStore model.JobStore, n model.Notifier, httpClient *http.Client, logger *slog.Logger) []*poller.CompanyPoller {
-	limiter := ratelimit.NewATSRateLimiter(cfg.RateLimit.MinDelay)
-	logger.Info("rate limiter configured", "min_delay", cfg.RateLimit.MinDelay.String())
+	logger.Info("scheduler min_delay", "min_delay", cfg.RateLimit.MinDelay.String())
 
 	var pollers []*poller.CompanyPoller
 	for _, company := range cfg.Companies {
@@ -161,8 +159,7 @@ func buildPollers(cfg *config.Config, jobFilter model.JobFilter, jobStore model.
 		}
 
 		fetcher = retry.NewRetryFetcher(fetcher, 2, 5*time.Second, logger)
-		fetcher = ratelimit.NewRateLimitedFetcher(fetcher, limiter, company.ATS)
-		p := poller.NewCompanyPoller(company.Name, fetcher, jobFilter, jobStore, n, cfg.Filters.MaxAge, logger)
+		p := poller.NewCompanyPoller(company.Name, company.ATS, fetcher, jobFilter, jobStore, n, cfg.Filters.MaxAge, logger)
 		pollers = append(pollers, p)
 		logger.Info("registered company", "name", company.Name, "ats", company.ATS)
 	}
