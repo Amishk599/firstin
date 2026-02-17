@@ -1,4 +1,4 @@
-polling_interval: 10m
+polling_interval: 15m
 
 rate_limit:
   # minimum gap between requests to the same ATS
@@ -55,6 +55,8 @@ filters:
   exclude_locations:
     - Canada
     - Cairo
+    - Germany
+    - Denmark
 
 companies:
   - name: anthropic
@@ -156,5 +158,26 @@ companies:
     ats: greenhouse
     board_token: "billcom"
     enabled: true
+
+  - name: envoy
+    ats: ashby
+    board_token: "envoy"
+    enabled: true
+
+  - name: databricks
+    ats: greenhouse
+    board_token: "databricks"
+    enabled: true
+
+  - name: roblox
+    ats: greenhouse
+    board_token: "roblox"
+    enabled: true
+
+  - name: coreweave
+    ats: greenhouse
+    board_token: "coreweave"
+    enabled: true
+  
 
 # TODO: add gem ATS
