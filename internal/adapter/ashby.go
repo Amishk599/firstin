@@ -59,7 +59,11 @@ func (a *AshbyAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ashby fetch for %s: unexpected status %d", a.boardToken, resp.StatusCode)
+		return nil, &model.HTTPError{
+			StatusCode: resp.StatusCode,
+			RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
+			Err:        fmt.Errorf("ashby fetch for %s: unexpected status %d", a.boardToken, resp.StatusCode),
+		}
 	}
 
 	var ashbyResp ashbyResponse

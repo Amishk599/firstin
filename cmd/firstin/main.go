@@ -19,6 +19,7 @@ import (
 	"github.com/amishk599/firstin/internal/notifier"
 	"github.com/amishk599/firstin/internal/poller"
 	"github.com/amishk599/firstin/internal/ratelimit"
+	"github.com/amishk599/firstin/internal/retry"
 	"github.com/amishk599/firstin/internal/scheduler"
 	"github.com/amishk599/firstin/internal/store"
 )
@@ -159,6 +160,7 @@ func buildPollers(cfg *config.Config, jobFilter model.JobFilter, jobStore model.
 			continue
 		}
 
+		fetcher = retry.NewRetryFetcher(fetcher, 2, 5*time.Second, logger)
 		fetcher = ratelimit.NewRateLimitedFetcher(fetcher, limiter, company.ATS)
 		p := poller.NewCompanyPoller(company.Name, fetcher, jobFilter, jobStore, n, cfg.Filters.MaxAge, logger)
 		pollers = append(pollers, p)
