@@ -113,6 +113,7 @@ func TestPoll_FilterAndDedup(t *testing.T) {
 		&AcceptAllFilter{},
 		store,
 		notifier,
+		time.Hour,
 		discardLogger(),
 	)
 
@@ -140,6 +141,7 @@ func TestPoll_FetchError(t *testing.T) {
 		&AcceptAllFilter{},
 		NewInMemoryStore(),
 		notifier,
+		time.Hour,
 		discardLogger(),
 	)
 
@@ -165,6 +167,7 @@ func TestPoll_AllAlreadySeen(t *testing.T) {
 		&AcceptAllFilter{},
 		store,
 		notifier,
+		time.Hour,
 		discardLogger(),
 	)
 
@@ -185,6 +188,7 @@ func TestPoll_FilterRejectsAll(t *testing.T) {
 		&RejectAllFilter{},
 		nonEmptyStore(),
 		notifier,
+		time.Hour,
 		discardLogger(),
 	)
 
@@ -213,6 +217,7 @@ func TestPoll_FreshnessSkipsOldJobs(t *testing.T) {
 		&AcceptAllFilter{},
 		nonEmptyStore(),
 		notifier,
+		time.Hour,
 		discardLogger(),
 	)
 
@@ -240,6 +245,7 @@ func TestPoll_NilPostedAtPassesThrough(t *testing.T) {
 		&AcceptAllFilter{},
 		nonEmptyStore(),
 		notifier,
+		time.Hour,
 		discardLogger(),
 	)
 
@@ -265,6 +271,7 @@ func TestPoll_FirstRunSeedsWithoutNotifying(t *testing.T) {
 		&AcceptAllFilter{},
 		store,
 		notifier,
+		time.Hour,
 		discardLogger(),
 	)
 

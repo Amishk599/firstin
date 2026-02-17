@@ -59,6 +59,7 @@ func makePoller(name string, fetcher model.JobFetcher) *poller.CompanyPoller {
 		&AcceptAllFilter{},
 		&NoOpStore{},
 		&NoOpNotifier{},
+		time.Hour,
 		discardLogger(),
 	)
 }

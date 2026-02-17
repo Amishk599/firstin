@@ -17,6 +17,7 @@ type CompanyPoller struct {
 	filter   model.JobFilter
 	store    model.JobStore
 	notifier model.Notifier
+	maxAge   time.Duration
 	logger   *slog.Logger
 }
 
@@ -27,6 +28,7 @@ func NewCompanyPoller(
 	filter model.JobFilter,
 	store model.JobStore,
 	notifier model.Notifier,
+	maxAge time.Duration,
 	logger *slog.Logger,
 ) *CompanyPoller {
 	return &CompanyPoller{
@@ -35,6 +37,7 @@ func NewCompanyPoller(
 		filter:   filter,
 		store:    store,
 		notifier: notifier,
+		maxAge:   maxAge,
 		logger:   logger,
 	}
 }
@@ -66,10 +69,10 @@ func (p *CompanyPoller) Poll(ctx context.Context) error {
 			filteredOut++
 			continue
 		}
-		// Freshness check: skip jobs posted more than 1 hour ago.
+		// Freshness check: skip jobs posted more than maxAge ago.
 		// Skip on first run — we need to seed all matching jobs so future
 		// polls can detect new ones by comparison.
-		if !firstRun && job.PostedAt != nil && job.PostedAt.Before(now.Add(-1*time.Hour)) {
+		if !firstRun && job.PostedAt != nil && job.PostedAt.Before(now.Add(-p.maxAge)) {
 			staleOut++
 			continue
 		}

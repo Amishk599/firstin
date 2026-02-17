@@ -10,6 +10,7 @@ notification:
   webhook_url: "${SLACK_WEBHOOK_URL}" # injected from GitHub secrets
 
 filters:
+  max_age: 24h # age of a job posting to be considered fresh (1h to 24h)
   title_keywords:
     - software engineer
     - backend

@@ -40,6 +40,7 @@ type CompanyConfig struct {
 type FilterConfig struct {
 	TitleKeywords []string
 	Locations     []string
+	MaxAge        time.Duration // max age of a job posting to be considered fresh
 }
 
 // rawConfig is used for YAML unmarshaling (snake_case fields and duration as string).
@@ -58,6 +59,7 @@ type rawRateLimitConfig struct {
 type rawFilterConfig struct {
 	TitleKeywords []string `yaml:"title_keywords"`
 	Locations     []string `yaml:"locations"`
+	MaxAge        string   `yaml:"max_age"`
 }
 
 // Load reads and parses the YAML config file at path, validates it, and returns Config.
@@ -80,6 +82,14 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parse polling_interval %q: %w", raw.PollingInterval, err)
 	}
 
+	maxAge := 1 * time.Hour // default: 1 hour
+	if raw.Filters.MaxAge != "" {
+		maxAge, err = time.ParseDuration(raw.Filters.MaxAge)
+		if err != nil {
+			return nil, fmt.Errorf("parse filters.max_age %q: %w", raw.Filters.MaxAge, err)
+		}
+	}
+
 	rateLimitDelay := 600 * time.Second // default: 5 mins
 	if raw.RateLimit.MinDelay != "" {
 		rateLimitDelay, err = time.ParseDuration(raw.RateLimit.MinDelay)
@@ -94,6 +104,7 @@ func Load(path string) (*Config, error) {
 		Filters: FilterConfig{
 			TitleKeywords: raw.Filters.TitleKeywords,
 			Locations:     raw.Filters.Locations,
+			MaxAge:        maxAge,
 		},
 		Notification: raw.Notification,
 		RateLimit: RateLimitConfig{
@@ -120,6 +131,10 @@ func validate(cfg *Config) error {
 	}
 	if enabled == 0 {
 		return fmt.Errorf("at least one company must be enabled")
+	}
+
+	if cfg.Filters.MaxAge < 1*time.Hour || cfg.Filters.MaxAge > 24*time.Hour {
+		return fmt.Errorf("filters.max_age must be between 1h and 24h, got %v", cfg.Filters.MaxAge)
 	}
 
 	if cfg.Notification.Type == "slack" {

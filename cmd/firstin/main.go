@@ -45,6 +45,7 @@ func main() {
 		"companies", len(cfg.Companies),
 		"title_keywords", cfg.Filters.TitleKeywords,
 		"locations", cfg.Filters.Locations,
+		"max_age", cfg.Filters.MaxAge.String(),
 	)
 
 	// In dry-run mode, use a NopStore so nothing is persisted.
@@ -115,7 +116,7 @@ func main() {
 		// Wrap with ATS-level rate limiting
 		fetcher = ratelimit.NewRateLimitedFetcher(fetcher, limiter, company.ATS)
 
-		p := poller.NewCompanyPoller(company.Name, fetcher, jobFilter, jobStore, n, logger)
+		p := poller.NewCompanyPoller(company.Name, fetcher, jobFilter, jobStore, n, cfg.Filters.MaxAge, logger)
 		pollers = append(pollers, p)
 		logger.Info("registered company", "name", company.Name, "ats", company.ATS)
 	}
