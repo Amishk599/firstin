@@ -33,6 +33,7 @@ filters:
     - staff member of technical staff
     - director
     - principal
+    - scientist
     - full stack
     - full-stack
     - ios
@@ -40,9 +41,11 @@ filters:
     - frontend
     - embedded
     - forward deployed
+    - sr staff
 
   locations:
     - United States
+    - United States of America
     - US
     - USA
     - Remote
@@ -179,5 +182,19 @@ companies:
     board_token: "coreweave"
     enabled: true
   
+  - name: slack
+    ats: workday
+    workday_url: "https://salesforce.wd12.myworkdayjobs.com/wday/cxs/salesforce/Slack"
+    enabled: true
+
+  - name: snapchat
+    ats: workday
+    workday_url: "https://snapchat.wd1.myworkdayjobs.com/wday/cxs/snapchat/snap"
+    enabled: true
+
+  - name: paloaltonetworks
+    ats: workday
+    workday_url: "https://paloaltonetworks.wd5.myworkdayjobs.com/wday/cxs/paloaltonetworks/panwexternalcareers"
+    enabled: true
 
 # TODO: add gem ATS

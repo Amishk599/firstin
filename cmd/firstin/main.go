@@ -132,7 +132,7 @@ func setupNotifier(cfg *config.Config, httpClient *http.Client, logger *slog.Log
 	}
 }
 
-func createFetcher(company config.CompanyConfig, httpClient *http.Client, logger *slog.Logger) (model.JobFetcher, bool) {
+func createFetcher(company config.CompanyConfig, httpClient *http.Client, jobFilter model.JobFilter, logger *slog.Logger) (model.JobFetcher, bool) {
 	switch company.ATS {
 	case "greenhouse":
 		return adapter.NewGreenhouseAdapter(company.BoardToken, company.Name, httpClient), true
@@ -140,6 +140,8 @@ func createFetcher(company config.CompanyConfig, httpClient *http.Client, logger
 		return adapter.NewAshbyAdapter(company.BoardToken, company.Name, httpClient), true
 	case "lever":
 		return adapter.NewLeverAdapter(company.BoardToken, company.Name, httpClient), true
+	case "workday":
+		return adapter.NewWorkdayAdapter(company.WorkdayURL, company.Name, httpClient, jobFilter), true
 	default:
 		logger.Warn("unsupported ATS, skipping", "company", company.Name, "ats", company.ATS)
 		return nil, false
@@ -155,7 +157,7 @@ func buildPollers(cfg *config.Config, jobFilter model.JobFilter, jobStore model.
 			continue
 		}
 
-		fetcher, ok := createFetcher(company, httpClient, logger)
+		fetcher, ok := createFetcher(company, httpClient, jobFilter, logger)
 		if !ok {
 			continue
 		}
@@ -206,14 +208,19 @@ func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) 
 	}
 	company := enabled[choice]
 
-	fetcher, ok := createFetcher(company, httpClient, logger)
+	fetcher, ok := createFetcher(company, httpClient, nil, logger)
 	if !ok {
 		fmt.Printf("Unsupported ATS: %s\n", company.ATS)
 		return
 	}
+	// In audit mode, Workday adapter should return all listings (not just fresh ones)
+	// but only detail-fetch the fresh ones to save API calls.
+	if wa, ok := fetcher.(*adapter.WorkdayAdapter); ok {
+		wa.SetAuditMode(true)
+	}
 
 	fmt.Printf("\nFetching jobs from %s...\n", company.Name)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	jobs, err := fetcher.FetchJobs(ctx)

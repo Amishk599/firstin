@@ -33,6 +33,7 @@ type CompanyConfig struct {
 	Name       string `yaml:"name"`
 	ATS        string `yaml:"ats"`
 	BoardToken string `yaml:"board_token"`
+	WorkdayURL string `yaml:"workday_url"`
 	Enabled    bool   `yaml:"enabled"`
 }
 
