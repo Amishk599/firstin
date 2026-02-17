@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/amishk599/firstin/internal/adapter"
+	"github.com/amishk599/firstin/internal/audit"
 	"github.com/amishk599/firstin/internal/config"
 	"github.com/amishk599/firstin/internal/filter"
 	"github.com/amishk599/firstin/internal/model"
@@ -26,6 +28,7 @@ func main() {
 	debug := flag.Bool("debug", false, "enable debug logging")
 	dryRun := flag.Bool("dry-run", false, "poll once, print matches, do not mark as seen, then exit")
 	testSlack := flag.Bool("test-slack", false, "send a test message to Slack and exit")
+	audit := flag.Bool("audit", false, "interactive filter audit: pick a company, see all jobs vs filtered")
 	flag.Parse()
 
 	logLevel := slog.LevelInfo
@@ -92,6 +95,11 @@ func main() {
 		return
 	}
 
+	if *audit {
+		runAudit(cfg, httpClient, logger)
+		return
+	}
+
 	// Shared ATS-level rate limiter - all companies on the same ATS share this instance.
 	limiter := ratelimit.NewATSRateLimiter(cfg.RateLimit.MinDelay)
 	logger.Info("rate limiter configured", "min_delay", cfg.RateLimit.MinDelay.String())
@@ -147,4 +155,66 @@ func main() {
 	}
 
 	logger.Info("goodbye")
+}
+
+func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) {
+	// Collect enabled companies.
+	var enabled []config.CompanyConfig
+	for _, c := range cfg.Companies {
+		if c.Enabled {
+			enabled = append(enabled, c)
+		}
+	}
+	if len(enabled) == 0 {
+		fmt.Println("No enabled companies in config.")
+		return
+	}
+
+	choice, err := audit.RunCompanyPicker(enabled)
+	if err != nil {
+		fmt.Printf("Picker error: %v\n", err)
+		return
+	}
+	if choice < 0 {
+		return
+	}
+	company := enabled[choice]
+
+	// Create adapter.
+	var fetcher model.JobFetcher
+	switch company.ATS {
+	case "greenhouse":
+		fetcher = adapter.NewGreenhouseAdapter(company.BoardToken, company.Name, httpClient)
+	case "ashby":
+		fetcher = adapter.NewAshbyAdapter(company.BoardToken, company.Name, httpClient)
+	default:
+		fmt.Printf("Unsupported ATS: %s\n", company.ATS)
+		return
+	}
+
+	// Fetch jobs.
+	fmt.Printf("\nFetching jobs from %s...\n", company.Name)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	jobs, err := fetcher.FetchJobs(ctx)
+	if err != nil {
+		fmt.Printf("Error fetching jobs: %v\n", err)
+		return
+	}
+	fmt.Printf("Fetched %d jobs.\n", len(jobs))
+
+	// Create filter and split into matched/unmatched.
+	jobFilter := filter.NewTitleAndLocationFilter(cfg.Filters.TitleKeywords, cfg.Filters.Locations)
+	var matched []model.Job
+	for _, j := range jobs {
+		if jobFilter.Match(j) {
+			matched = append(matched, j)
+		}
+	}
+
+	// Launch interactive TUI.
+	if err := audit.RunAuditTUI(jobs, matched, cfg.Filters); err != nil {
+		fmt.Printf("TUI error: %v\n", err)
+	}
 }

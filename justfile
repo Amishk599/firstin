@@ -21,6 +21,9 @@ dry-run:
 test-slack:
     go run ./cmd/firstin/ -test-slack
 
+audit:
+    go run ./cmd/firstin/ -audit
+
 lint:
     go vet ./...
 
