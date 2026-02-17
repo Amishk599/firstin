@@ -39,6 +39,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *auditMode {
+		runAudit(cfg, &http.Client{Timeout: 30 * time.Second}, logger)
+		return
+	}
+
 	logger.Info("config loaded",
 		"interval", cfg.PollingInterval.String(),
 		"companies", len(cfg.Companies),
@@ -46,11 +51,6 @@ func main() {
 		"locations", len(cfg.Filters.Locations),
 		"max_age", cfg.Filters.MaxAge.String(),
 	)
-
-	if *auditMode {
-		runAudit(cfg, &http.Client{Timeout: 30 * time.Second}, logger)
-		return
-	}
 
 	jobStore, cleanup := setupStore(*dryRun, logger)
 	defer cleanup()

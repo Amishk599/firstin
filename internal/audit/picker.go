@@ -2,6 +2,8 @@ package audit
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -26,6 +28,9 @@ var (
 	pickerHintStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")).
 			Padding(1, 0, 0, 2)
+
+	pickerATSStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("238"))
 )
 
 type pickerModel struct {
@@ -66,7 +71,9 @@ func (m pickerModel) View() string {
 	s += "\n"
 
 	for i, c := range m.companies {
-		label := fmt.Sprintf("%s (%s)", c.Name, c.ATS)
+		num := fmt.Sprintf("%2d.", i+1)
+		ats := pickerATSStyle.Render(fmt.Sprintf("(%s)", c.ATS))
+		label := fmt.Sprintf("%s %s %s", num, c.Name, ats)
 		if i == m.cursor {
 			s += pickerSelectedStyle.Render("> "+label) + "\n"
 		} else {
@@ -81,6 +88,10 @@ func (m pickerModel) View() string {
 // RunCompanyPicker shows an interactive company selector.
 // Returns the index of the chosen company, or -1 if the user quit.
 func RunCompanyPicker(companies []config.CompanyConfig) (int, error) {
+	sort.Slice(companies, func(i, j int) bool {
+		return strings.ToLower(companies[i].Name) < strings.ToLower(companies[j].Name)
+	})
+
 	m := pickerModel{
 		companies: companies,
 		chosen:    -1,
