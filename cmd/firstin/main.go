@@ -28,14 +28,10 @@ func main() {
 	debug := flag.Bool("debug", false, "enable debug logging")
 	dryRun := flag.Bool("dry-run", false, "poll once, print matches, do not mark as seen, then exit")
 	testSlack := flag.Bool("test-slack", false, "send a test message to Slack and exit")
-	audit := flag.Bool("audit", false, "interactive filter audit: pick a company, see all jobs vs filtered")
+	auditMode := flag.Bool("audit", false, "interactive filter audit: pick a company, see all jobs vs filtered")
 	flag.Parse()
 
-	logLevel := slog.LevelInfo
-	if *debug {
-		logLevel = slog.LevelDebug
-	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+	logger := setupLogger(*debug)
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -46,41 +42,22 @@ func main() {
 	logger.Info("config loaded",
 		"interval", cfg.PollingInterval.String(),
 		"companies", len(cfg.Companies),
-		"title_keywords", cfg.Filters.TitleKeywords,
-		"locations", cfg.Filters.Locations,
+		"title_keywords", len(cfg.Filters.TitleKeywords),
+		"locations", len(cfg.Filters.Locations),
 		"max_age", cfg.Filters.MaxAge.String(),
 	)
 
-	// In dry-run mode, use a NopStore so nothing is persisted.
-	var jobStore model.JobStore
-	if *dryRun {
-		logger.Info("dry-run mode enabled, no jobs will be marked as seen")
-		jobStore = store.NewNopStore()
-	} else {
-		sqlStore, err := store.NewSQLiteStore("jobs.db")
-		if err != nil {
-			logger.Error("failed to open store", "error", err)
-			os.Exit(1)
-		}
-		defer sqlStore.Close()
-		jobStore = sqlStore
+	if *auditMode {
+		runAudit(cfg, &http.Client{Timeout: 30 * time.Second}, logger)
+		return
 	}
 
-	jobFilter := filter.NewTitleAndLocationFilter(
-		cfg.Filters.TitleKeywords,
-		cfg.Filters.Locations,
-	)
+	jobStore, cleanup := setupStore(*dryRun, logger)
+	defer cleanup()
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
-
-	var n model.Notifier
-	switch cfg.Notification.Type {
-	case "slack":
-		n = notifier.NewSlackNotifier(cfg.Notification.WebhookURL, httpClient, logger)
-		logger.Info("using slack notifier")
-	default:
-		n = notifier.NewLogNotifier(logger)
-	}
+	jobFilter := filter.NewTitleAndLocationFilter(cfg.Filters.TitleKeywords, cfg.Filters.Locations)
+	n := setupNotifier(cfg, httpClient, logger)
 
 	if *testSlack {
 		if cfg.Notification.Type != "slack" {
@@ -95,40 +72,7 @@ func main() {
 		return
 	}
 
-	if *audit {
-		runAudit(cfg, httpClient, logger)
-		return
-	}
-
-	// Shared ATS-level rate limiter - all companies on the same ATS share this instance.
-	limiter := ratelimit.NewATSRateLimiter(cfg.RateLimit.MinDelay)
-	logger.Info("rate limiter configured", "min_delay", cfg.RateLimit.MinDelay.String())
-
-	var pollers []*poller.CompanyPoller
-	for _, company := range cfg.Companies {
-		if !company.Enabled {
-			continue
-		}
-
-		var fetcher model.JobFetcher
-		switch company.ATS {
-		case "greenhouse":
-			fetcher = adapter.NewGreenhouseAdapter(company.BoardToken, company.Name, httpClient)
-		case "ashby":
-			fetcher = adapter.NewAshbyAdapter(company.BoardToken, company.Name, httpClient)
-		default:
-			logger.Warn("unsupported ATS, skipping", "company", company.Name, "ats", company.ATS)
-			continue
-		}
-
-		// Wrap with ATS-level rate limiting
-		fetcher = ratelimit.NewRateLimitedFetcher(fetcher, limiter, company.ATS)
-
-		p := poller.NewCompanyPoller(company.Name, fetcher, jobFilter, jobStore, n, cfg.Filters.MaxAge, logger)
-		pollers = append(pollers, p)
-		logger.Info("registered company", "name", company.Name, "ats", company.ATS)
-	}
-
+	pollers := buildPollers(cfg, jobFilter, jobStore, n, httpClient, logger)
 	if len(pollers) == 0 {
 		logger.Error("no companies to poll")
 		os.Exit(1)
@@ -137,14 +81,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// In dry-run mode, poll each company once and exit.
 	if *dryRun {
-		for _, p := range pollers {
-			if err := p.Poll(ctx); err != nil {
-				logger.Error("poll failed", "company", p.Name, "error", err)
-			}
-		}
-		logger.Info("dry-run complete")
+		runDryRun(ctx, pollers, logger)
 		return
 	}
 
@@ -157,8 +95,83 @@ func main() {
 	logger.Info("goodbye")
 }
 
+func setupLogger(debug bool) *slog.Logger {
+	logLevel := slog.LevelInfo
+	if debug {
+		logLevel = slog.LevelDebug
+	}
+	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+}
+
+func setupStore(dryRun bool, logger *slog.Logger) (model.JobStore, func()) {
+	if dryRun {
+		logger.Info("dry-run mode enabled, no jobs will be marked as seen")
+		return store.NewNopStore(), func() {}
+	}
+
+	sqlStore, err := store.NewSQLiteStore("jobs.db")
+	if err != nil {
+		logger.Error("failed to open store", "error", err)
+		os.Exit(1)
+	}
+	return sqlStore, func() { sqlStore.Close() }
+}
+
+func setupNotifier(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) model.Notifier {
+	switch cfg.Notification.Type {
+	case "slack":
+		logger.Info("using slack notifier")
+		return notifier.NewSlackNotifier(cfg.Notification.WebhookURL, httpClient, logger)
+	default:
+		return notifier.NewLogNotifier(logger)
+	}
+}
+
+func createFetcher(company config.CompanyConfig, httpClient *http.Client, logger *slog.Logger) (model.JobFetcher, bool) {
+	switch company.ATS {
+	case "greenhouse":
+		return adapter.NewGreenhouseAdapter(company.BoardToken, company.Name, httpClient), true
+	case "ashby":
+		return adapter.NewAshbyAdapter(company.BoardToken, company.Name, httpClient), true
+	default:
+		logger.Warn("unsupported ATS, skipping", "company", company.Name, "ats", company.ATS)
+		return nil, false
+	}
+}
+
+func buildPollers(cfg *config.Config, jobFilter model.JobFilter, jobStore model.JobStore, n model.Notifier, httpClient *http.Client, logger *slog.Logger) []*poller.CompanyPoller {
+	limiter := ratelimit.NewATSRateLimiter(cfg.RateLimit.MinDelay)
+	logger.Info("rate limiter configured", "min_delay", cfg.RateLimit.MinDelay.String())
+
+	var pollers []*poller.CompanyPoller
+	for _, company := range cfg.Companies {
+		if !company.Enabled {
+			continue
+		}
+
+		fetcher, ok := createFetcher(company, httpClient, logger)
+		if !ok {
+			continue
+		}
+
+		fetcher = ratelimit.NewRateLimitedFetcher(fetcher, limiter, company.ATS)
+		p := poller.NewCompanyPoller(company.Name, fetcher, jobFilter, jobStore, n, cfg.Filters.MaxAge, logger)
+		pollers = append(pollers, p)
+		logger.Info("registered company", "name", company.Name, "ats", company.ATS)
+	}
+	return pollers
+}
+
+func runDryRun(ctx context.Context, pollers []*poller.CompanyPoller, logger *slog.Logger) {
+	for _, p := range pollers {
+		if err := p.Poll(ctx); err != nil {
+			logger.Error("poll failed", "company", p.Name, "error", err)
+		}
+	}
+	logger.Info("dry-run complete")
+}
+
 func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) {
-	// Collect enabled companies.
 	var enabled []config.CompanyConfig
 	for _, c := range cfg.Companies {
 		if c.Enabled {
@@ -180,19 +193,12 @@ func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) 
 	}
 	company := enabled[choice]
 
-	// Create adapter.
-	var fetcher model.JobFetcher
-	switch company.ATS {
-	case "greenhouse":
-		fetcher = adapter.NewGreenhouseAdapter(company.BoardToken, company.Name, httpClient)
-	case "ashby":
-		fetcher = adapter.NewAshbyAdapter(company.BoardToken, company.Name, httpClient)
-	default:
+	fetcher, ok := createFetcher(company, httpClient, logger)
+	if !ok {
 		fmt.Printf("Unsupported ATS: %s\n", company.ATS)
 		return
 	}
 
-	// Fetch jobs.
 	fmt.Printf("\nFetching jobs from %s...\n", company.Name)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -204,7 +210,6 @@ func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) 
 	}
 	fmt.Printf("Fetched %d jobs.\n", len(jobs))
 
-	// Create filter and split into matched/unmatched.
 	jobFilter := filter.NewTitleAndLocationFilter(cfg.Filters.TitleKeywords, cfg.Filters.Locations)
 	var matched []model.Job
 	for _, j := range jobs {
@@ -213,7 +218,6 @@ func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) 
 		}
 	}
 
-	// Launch interactive TUI.
 	if err := audit.RunAuditTUI(jobs, matched, cfg.Filters); err != nil {
 		fmt.Printf("TUI error: %v\n", err)
 	}
