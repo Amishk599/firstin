@@ -12,11 +12,13 @@ func job(title, location string) model.Job {
 
 func TestTitleAndLocationFilter_Match(t *testing.T) {
 	tests := []struct {
-		name           string
-		titleKeywords  []string
-		locations      []string
-		job            model.Job
-		wantMatch      bool
+		name                 string
+		titleKeywords        []string
+		titleExcludeKeywords []string
+		locations            []string
+		excludeLocations     []string
+		job                  model.Job
+		wantMatch            bool
 	}{
 		{
 			name:          "matches both title and location",
@@ -47,16 +49,30 @@ func TestTitleAndLocationFilter_Match(t *testing.T) {
 			wantMatch:     false,
 		},
 		{
-			name:          "empty keyword lists pass all",
-			titleKeywords: []string{},
-			locations:     []string{},
-			job:           job("Any Role", "Anywhere"),
-			wantMatch:     true,
+			name:      "empty keyword lists pass all",
+			job:       job("Any Role", "Anywhere"),
+			wantMatch: true,
+		},
+		{
+			name:                 "title matches include but hits exclude",
+			titleKeywords:        []string{"software engineer"},
+			titleExcludeKeywords: []string{"manager", "intern"},
+			locations:            []string{"Remote"},
+			job:                  job("Software Engineer Intern", "Remote"),
+			wantMatch:            false,
+		},
+		{
+			name:             "location matches include but hits exclude",
+			titleKeywords:    []string{"software engineer"},
+			locations:        []string{"CA"},
+			excludeLocations: []string{"Canada", "Cairo"},
+			job:              job("Software Engineer", "Toronto, Canada"),
+			wantMatch:        false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := NewTitleAndLocationFilter(tt.titleKeywords, tt.locations)
+			f := NewTitleAndLocationFilter(tt.titleKeywords, tt.titleExcludeKeywords, tt.locations, tt.excludeLocations)
 			got := f.Match(tt.job)
 			if got != tt.wantMatch {
 				t.Errorf("Match() = %v, want %v", got, tt.wantMatch)

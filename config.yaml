@@ -13,10 +13,34 @@ filters:
   max_age: 24h # age of a job posting to be considered fresh (1h to 24h)
   title_keywords:
     - software engineer
+    - software developer
+    - software development engineer
     - backend
+    - golang
+    - python
+    - distributed systems
+    - member of technical staff
+    - ai engineer
+    - agentic ai engineer
+    - mts
     - sde
-    - platform
-    - infrastructure
+    - swe
+
+  title_exclude_keywords:
+    - manager
+    - intern
+    - staff software engineer
+    - staff member of technical staff
+    - director
+    - principal
+    - full stack
+    - full-stack
+    - ios
+    - android
+    - frontend
+    - embedded
+    - forward deployed
+
   locations:
     - United States
     - US
@@ -25,6 +49,9 @@ filters:
     - CA
     - New York
     - San Jose
+  exclude_locations:
+    - Canada
+    - Cairo
 
 companies:
   - name: anthropic

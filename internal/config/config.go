@@ -38,9 +38,11 @@ type CompanyConfig struct {
 
 // FilterConfig holds keyword and location filter settings.
 type FilterConfig struct {
-	TitleKeywords []string
-	Locations     []string
-	MaxAge        time.Duration // max age of a job posting to be considered fresh
+	TitleKeywords        []string
+	TitleExcludeKeywords []string
+	Locations            []string
+	ExcludeLocations     []string
+	MaxAge               time.Duration // max age of a job posting to be considered fresh
 }
 
 // rawConfig is used for YAML unmarshaling (snake_case fields and duration as string).
@@ -57,9 +59,11 @@ type rawRateLimitConfig struct {
 }
 
 type rawFilterConfig struct {
-	TitleKeywords []string `yaml:"title_keywords"`
-	Locations     []string `yaml:"locations"`
-	MaxAge        string   `yaml:"max_age"`
+	TitleKeywords        []string `yaml:"title_keywords"`
+	TitleExcludeKeywords []string `yaml:"title_exclude_keywords"`
+	Locations            []string `yaml:"locations"`
+	ExcludeLocations     []string `yaml:"exclude_locations"`
+	MaxAge               string   `yaml:"max_age"`
 }
 
 // Load reads and parses the YAML config file at path, validates it, and returns Config.
@@ -102,9 +106,11 @@ func Load(path string) (*Config, error) {
 		PollingInterval: interval,
 		Companies:       raw.Companies,
 		Filters: FilterConfig{
-			TitleKeywords: raw.Filters.TitleKeywords,
-			Locations:     raw.Filters.Locations,
-			MaxAge:        maxAge,
+			TitleKeywords:        raw.Filters.TitleKeywords,
+			TitleExcludeKeywords: raw.Filters.TitleExcludeKeywords,
+			Locations:            raw.Filters.Locations,
+			ExcludeLocations:     raw.Filters.ExcludeLocations,
+			MaxAge:               maxAge,
 		},
 		Notification: raw.Notification,
 		RateLimit: RateLimitConfig{

@@ -56,7 +56,12 @@ func main() {
 	defer cleanup()
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
-	jobFilter := filter.NewTitleAndLocationFilter(cfg.Filters.TitleKeywords, cfg.Filters.Locations)
+	jobFilter := filter.NewTitleAndLocationFilter(
+		cfg.Filters.TitleKeywords,
+		cfg.Filters.TitleExcludeKeywords,
+		cfg.Filters.Locations,
+		cfg.Filters.ExcludeLocations,
+	)
 	n := setupNotifier(cfg, httpClient, logger)
 
 	if *testSlack {
@@ -210,7 +215,12 @@ func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) 
 	}
 	fmt.Printf("Fetched %d jobs.\n", len(jobs))
 
-	jobFilter := filter.NewTitleAndLocationFilter(cfg.Filters.TitleKeywords, cfg.Filters.Locations)
+	jobFilter := filter.NewTitleAndLocationFilter(
+		cfg.Filters.TitleKeywords,
+		cfg.Filters.TitleExcludeKeywords,
+		cfg.Filters.Locations,
+		cfg.Filters.ExcludeLocations,
+	)
 	var matched []model.Job
 	for _, j := range jobs {
 		if jobFilter.Match(j) {
