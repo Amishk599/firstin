@@ -44,10 +44,13 @@ filters:
   locations:
     - United States
     - US
+    - USA
     - Remote
     - San Francisco
     - CA
+    - California
     - New York
+    - NY
     - San Jose
   exclude_locations:
     - Canada
@@ -83,3 +86,75 @@ companies:
     ats: greenhouse
     board_token: "stripe"
     enabled: true
+
+  - name: spotify
+    ats: lever
+    board_token: "spotify"
+    enabled: true
+
+  - name: palantir
+    ats: lever
+    board_token: "palantir"
+    enabled: true
+
+  - name: snowflake
+    ats: ashby
+    board_token: "snowflake"
+    enabled: true
+
+  - name: perplexity
+    ats: ashby
+    board_token: "perplexity"
+    enabled: true
+
+  - name: scaleai
+    ats: greenhouse
+    board_token: "scaleai"
+    enabled: true
+
+  - name: langchain
+    ats: ashby
+    board_token: "langchain"
+    enabled: true
+
+  - name: cloudflare
+    ats: greenhouse
+    board_token: "cloudflare"
+    enabled: true
+
+  - name: ramp
+    ats: ashby
+    board_token: "ramp"
+    enabled: true
+
+  - name: doordash
+    ats: greenhouse
+    board_token: "doordashusa"
+    enabled: true
+
+  - name: togetherai
+    ats: greenhouse
+    board_token: "togetherai"
+    enabled: true
+
+  - name: fireworksai
+    ats: greenhouse
+    board_token: "fireworksai"
+    enabled: true
+
+  - name: temporal
+    ats: greenhouse
+    board_token: "temporaltechnologies"
+    enabled: true
+
+  - name: glean
+    ats: greenhouse
+    board_token: "gleanwork"
+    enabled: true
+
+  - name: bill
+    ats: greenhouse
+    board_token: "billcom"
+    enabled: true
+
+# TODO: add gem ATS

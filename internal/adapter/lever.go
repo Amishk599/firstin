@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/amishk599/firstin/internal/model"
 )
@@ -15,6 +16,7 @@ const leverBaseURL = "https://api.lever.co/v0/postings"
 // leverCategories represents the categories object in a Lever job.
 type leverCategories struct {
 	Team         string   `json:"team"`
+	Department   string   `json:"department"`
 	Location     string   `json:"location"`
 	Commitment   string   `json:"commitment"`
 	AllLocations []string `json:"allLocations"`
@@ -22,14 +24,15 @@ type leverCategories struct {
 
 // leverJob represents a single job in the Lever API response.
 type leverJob struct {
-	ID              string          `json:"id"`
-	Text            string          `json:"text"`
-	Description     string          `json:"description"`
-	DescriptionPlain string         `json:"descriptionPlain"`
-	Categories      leverCategories `json:"categories"`
-	WorkplaceType   string          `json:"workplaceType"`
-	HostedURL       string          `json:"hostedUrl"`
-	ApplyURL        string          `json:"applyUrl"`
+	ID               string          `json:"id"`
+	Text             string          `json:"text"`
+	Description      string          `json:"description"`
+	DescriptionPlain string          `json:"descriptionPlain"`
+	Categories       leverCategories `json:"categories"`
+	CreatedAt        int64           `json:"createdAt"`
+	WorkplaceType    string          `json:"workplaceType"`
+	HostedURL        string          `json:"hostedUrl"`
+	ApplyURL         string          `json:"applyUrl"`
 }
 
 // LeverAdapter fetches jobs from the Lever public postings API.
@@ -85,10 +88,11 @@ func (a *LeverAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) {
 			location = strings.Join(lj.Categories.AllLocations, ", ")
 		}
 
-		// Use applyUrl if available, otherwise fallback to hostedUrl
-		url := lj.ApplyURL
-		if url == "" {
-			url = lj.HostedURL
+		// Convert createdAt (Unix milliseconds) to time.Time
+		var postedAt *time.Time
+		if lj.CreatedAt > 0 {
+			t := time.UnixMilli(lj.CreatedAt)
+			postedAt = &t
 		}
 
 		job := model.Job{
@@ -96,9 +100,9 @@ func (a *LeverAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) {
 			Company:  a.companyName,
 			Title:    lj.Text,
 			Location: location,
-			URL:      url,
+			URL:      lj.HostedURL,
+			PostedAt: postedAt,
 			Source:   "lever",
-			// Lever API doesn't provide posted_at timestamp, so PostedAt remains nil
 		}
 
 		jobs = append(jobs, job)

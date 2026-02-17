@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestLeverAdapter_FetchJobs_Success(t *testing.T) {
@@ -16,10 +17,12 @@ func TestLeverAdapter_FetchJobs_Success(t *testing.T) {
 			"descriptionPlain": "Plain text job description",
 			"categories": {
 				"team": "Engineering",
+				"department": "Platform",
 				"location": "San Francisco, CA",
 				"commitment": "Full-time",
 				"allLocations": ["San Francisco, CA", "Remote"]
 			},
+			"createdAt": 1769784074110,
 			"workplaceType": "hybrid",
 			"hostedUrl": "https://jobs.lever.co/acme/ff7ef527-b0d3-4c44-836a-8d6b58ac321e",
 			"applyUrl": "https://jobs.lever.co/acme/ff7ef527-b0d3-4c44-836a-8d6b58ac321e/apply"
@@ -31,10 +34,12 @@ func TestLeverAdapter_FetchJobs_Success(t *testing.T) {
 			"descriptionPlain": "Backend job description",
 			"categories": {
 				"team": "Engineering",
+				"department": "Backend",
 				"location": "Remote",
 				"commitment": "Full-time",
 				"allLocations": ["Remote"]
 			},
+			"createdAt": 1769870474110,
 			"workplaceType": "remote",
 			"hostedUrl": "https://jobs.lever.co/acme/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			"applyUrl": "https://jobs.lever.co/acme/a1b2c3d4-e5f6-7890-abcd-ef1234567890/apply"
@@ -70,14 +75,18 @@ func TestLeverAdapter_FetchJobs_Success(t *testing.T) {
 	if j.Location != "San Francisco, CA, Remote" {
 		t.Errorf("expected location 'San Francisco, CA, Remote', got %s", j.Location)
 	}
-	if j.URL != "https://jobs.lever.co/acme/ff7ef527-b0d3-4c44-836a-8d6b58ac321e/apply" {
-		t.Errorf("expected apply URL, got %s", j.URL)
+	if j.URL != "https://jobs.lever.co/acme/ff7ef527-b0d3-4c44-836a-8d6b58ac321e" {
+		t.Errorf("expected hostedUrl, got %s", j.URL)
 	}
 	if j.Source != "lever" {
 		t.Errorf("expected source lever, got %s", j.Source)
 	}
-	if j.PostedAt != nil {
-		t.Error("expected PostedAt to be nil (Lever API doesn't provide timestamp)")
+	if j.PostedAt == nil {
+		t.Fatal("expected PostedAt to be set from createdAt")
+	}
+	expected := time.UnixMilli(1769784074110).UTC()
+	if !j.PostedAt.Equal(expected) {
+		t.Errorf("expected PostedAt %v, got %v", expected, j.PostedAt)
 	}
 
 	// Verify second job
@@ -87,6 +96,9 @@ func TestLeverAdapter_FetchJobs_Success(t *testing.T) {
 	}
 	if j2.Location != "Remote" {
 		t.Errorf("expected location Remote, got %s", j2.Location)
+	}
+	if j2.PostedAt == nil {
+		t.Fatal("expected PostedAt to be set for second job")
 	}
 }
 
@@ -137,7 +149,7 @@ func TestLeverAdapter_FetchJobs_HTTPError(t *testing.T) {
 	}
 }
 
-func TestLeverAdapter_FetchJobs_FallbackToHostedURL(t *testing.T) {
+func TestLeverAdapter_FetchJobs_LocationFallback(t *testing.T) {
 	payload := `[
 		{
 			"id": "test-id-123",
@@ -146,12 +158,15 @@ func TestLeverAdapter_FetchJobs_FallbackToHostedURL(t *testing.T) {
 			"descriptionPlain": "Test",
 			"categories": {
 				"team": "Engineering",
-				"location": "Remote",
+				"department": "QA",
+				"location": "New York, NY",
 				"commitment": "Full-time",
 				"allLocations": []
 			},
-			"workplaceType": "remote",
-			"hostedUrl": "https://jobs.lever.co/acme/test-id-123"
+			"createdAt": 1769784074110,
+			"workplaceType": "onsite",
+			"hostedUrl": "https://jobs.lever.co/acme/test-id-123",
+			"applyUrl": "https://jobs.lever.co/acme/test-id-123/apply"
 		}
 	]`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -170,8 +185,11 @@ func TestLeverAdapter_FetchJobs_FallbackToHostedURL(t *testing.T) {
 		t.Fatalf("expected 1 job, got %d", len(jobs))
 	}
 
+	if jobs[0].Location != "New York, NY" {
+		t.Errorf("expected fallback to categories.location, got %s", jobs[0].Location)
+	}
 	if jobs[0].URL != "https://jobs.lever.co/acme/test-id-123" {
-		t.Errorf("expected fallback to hostedUrl, got %s", jobs[0].URL)
+		t.Errorf("expected hostedUrl, got %s", jobs[0].URL)
 	}
 }
 
