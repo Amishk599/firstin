@@ -1,8 +1,8 @@
-polling_interval: 15m
+polling_interval: 10m
 
 rate_limit:
   # minimum gap between requests to the same ATS
-  min_delay: 720s # 12 mins
+  min_delay: 600s # 10 mins
 
 # Notification settings (options: log, slack)
 notification:
@@ -197,4 +197,30 @@ companies:
     workday_url: "https://paloaltonetworks.wd5.myworkdayjobs.com/wday/cxs/paloaltonetworks/panwexternalcareers"
     enabled: true
 
+  - name: nvidia
+    ats: workday
+    workday_url: "https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite"
+    enabled: true
+
+  - name: cloudera
+    ats: workday
+    workday_url: "https://cloudera.wd5.myworkdayjobs.com/wday/cxs/cloudera/External_Career"
+    enabled: true
+
+  - name: walmart
+    ats: workday
+    workday_url: "https://walmart.wd5.myworkdayjobs.com/wday/cxs/walmart/WalmartExternal"
+    enabled: true
+
+  - name: salesforce
+    ats: workday
+    workday_url: "https://salesforce.wd12.myworkdayjobs.com/wday/cxs/salesforce/External_Career_Site"
+    enabled: true
+
+  - name: whatnot
+    ats: ashby
+    board_token: "whatnot"
+    enabled: true
+
 # TODO: add gem ATS
+# TODO: add greenhouse: lyft, xai, affirm
