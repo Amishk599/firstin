@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/amishk599/firstin/internal/model"
@@ -50,9 +51,11 @@ func (s *SlackNotifier) Notify(jobs []model.Job) error {
 		}
 	}
 
+	sent := len(jobs) - failures
 	if failures == len(jobs) {
 		return fmt.Errorf("all %d slack notifications failed", failures)
 	}
+	s.logger.Info("slack notifications complete", "sent", sent, "failed", failures)
 	return nil
 }
 
@@ -88,12 +91,14 @@ func (s *SlackNotifier) sendMessage(j model.Job) error {
 		if resp2.StatusCode != http.StatusOK {
 			return fmt.Errorf("slack returned %d on retry", resp2.StatusCode)
 		}
+		s.logger.Info("slack message sent", "company", j.Company, "title", j.Title, "retried", true)
 		return nil
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("slack returned %d", resp.StatusCode)
 	}
+	s.logger.Info("slack message sent", "company", j.Company, "title", j.Title)
 	return nil
 }
 
@@ -138,22 +143,37 @@ func SendTestMessage(n model.Notifier) error {
 	return n.Notify([]model.Job{testJob})
 }
 
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
 func buildPayload(j model.Job) slackPayload {
 	postedText := "Just detected"
 	if j.PostedAt != nil {
-		postedText = j.PostedAt.Format(time.RFC1123)
+		pst, err := time.LoadLocation("America/Los_Angeles")
+		if err == nil {
+			postedText = j.PostedAt.In(pst).Format(time.RFC1123)
+		} else {
+			postedText = j.PostedAt.Format(time.RFC1123)
+		}
 	}
+
+	company := capitalize(j.Company)
+	source := capitalize(j.Source)
 
 	return slackPayload{
 		Blocks: []slackBlock{
 			{
 				Type: "header",
-				Text: &slackText{Type: "plain_text", Text: "🚀 New Job: " + j.Title},
+				Text: &slackText{Type: "plain_text", Text: "🚀 " + company + ": " + j.Title},
 			},
 			{
 				Type: "section",
 				Fields: []slackText{
-					{Type: "mrkdwn", Text: "*Company:*\n" + j.Company},
+					{Type: "mrkdwn", Text: "*Company:*\n" + company},
 					{Type: "mrkdwn", Text: "*Location:*\n" + j.Location},
 				},
 			},
@@ -161,7 +181,7 @@ func buildPayload(j model.Job) slackPayload {
 				Type: "section",
 				Fields: []slackText{
 					{Type: "mrkdwn", Text: "*Posted:*\n" + postedText},
-					{Type: "mrkdwn", Text: "*Source:*\n" + j.Source},
+					{Type: "mrkdwn", Text: "*Source:*\n" + source},
 				},
 			},
 			{

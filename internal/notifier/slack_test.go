@@ -73,8 +73,8 @@ func TestSlackNotifier_SingleJob(t *testing.T) {
 	}
 
 	header := payload.Blocks[0]
-	if header.Text.Text != "🚀 New Job: Backend Engineer" {
-		t.Errorf("header text = %q, want job title", header.Text.Text)
+	if header.Text.Text != "🚀 Acme Corp: Backend Engineer" {
+		t.Errorf("header text = %q, want company: title", header.Text.Text)
 	}
 
 	companyField := payload.Blocks[1].Fields[0]
