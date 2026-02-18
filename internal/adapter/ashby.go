@@ -90,6 +90,7 @@ func (a *AshbyAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) {
 			t, err := time.Parse(time.RFC3339, aj.PublishedAt)
 			if err == nil {
 				job.PostedAt = &t
+				job.Detail = &model.JobDetail{PublishedAt: &t}
 			}
 		}
 

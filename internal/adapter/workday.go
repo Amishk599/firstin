@@ -198,6 +198,7 @@ func (a *WorkdayAdapter) jobFromListing(l workdayListing) model.Job {
 		Title:    l.Title,
 		Location: l.LocationsText,
 		Source:   "workday",
+		Detail:   &model.JobDetail{PostedOn: l.PostedOn},
 	}
 	job.PostedAt = parsePostedOn(l.PostedOn)
 	return job
@@ -245,17 +246,50 @@ func (a *WorkdayAdapter) fetchDetail(ctx context.Context, listing workdayListing
 		Source:   "workday",
 	}
 
+	jobDetail := &model.JobDetail{
+		PostedOn: info.PostedOn,
+		ApplyURL: info.ExternalURL,
+	}
+
 	// Prefer startDate (format "2006-01-02"), fall back to postedOn parsing
 	if info.StartDate != "" {
 		if t, err := time.Parse("2006-01-02", info.StartDate); err == nil {
 			job.PostedAt = &t
+			jobDetail.StartDate = &t
 		}
 	}
 	if job.PostedAt == nil {
 		job.PostedAt = parsePostedOn(info.PostedOn)
 	}
 
+	job.Detail = jobDetail
 	return job, nil
+}
+
+// FetchJobDetail enriches a job with data from the Workday detail endpoint.
+// If detail is already fully populated (e.g. fresh listings), returns as-is.
+func (a *WorkdayAdapter) FetchJobDetail(ctx context.Context, job model.Job) (model.Job, error) {
+	// Already has full detail (fresh listing that went through fetchDetail)
+	if job.Detail != nil && job.Detail.ApplyURL != "" {
+		return job, nil
+	}
+
+	// The job ID for stale listings is the externalPath
+	listing := workdayListing{
+		Title:         job.Title,
+		ExternalPath:  job.ID,
+		LocationsText: job.Location,
+	}
+	if job.Detail != nil {
+		listing.PostedOn = job.Detail.PostedOn
+	}
+
+	enriched, err := a.fetchDetail(ctx, listing)
+	if err != nil {
+		return job, err
+	}
+
+	return enriched, nil
 }
 
 var ambiguousLocationRegex = regexp.MustCompile(`^\d+ Locations?$`)

@@ -243,7 +243,13 @@ func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) 
 		}
 	}
 
-	if err := audit.RunAuditTUI(jobs, matched, cfg.Filters); err != nil {
+	// Use adapter as detail fetcher if it supports it, otherwise nil.
+	var detailFetcher model.JobDetailFetcher
+	if df, ok := fetcher.(model.JobDetailFetcher); ok {
+		detailFetcher = df
+	}
+
+	if err := audit.RunAuditTUI(jobs, matched, cfg.Filters, detailFetcher); err != nil {
 		fmt.Printf("TUI error: %v\n", err)
 	}
 }

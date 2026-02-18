@@ -103,6 +103,10 @@ func (a *LeverAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) {
 			URL:      lj.HostedURL,
 			PostedAt: postedAt,
 			Source:   "lever",
+			Detail: &model.JobDetail{
+				PublishedAt: postedAt,
+				ApplyURL:    lj.ApplyURL,
+			},
 		}
 
 		jobs = append(jobs, job)

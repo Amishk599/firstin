@@ -37,15 +37,16 @@ type greenhouseResponse struct {
 
 // greenhouseJobDetail is the response from the Greenhouse job detail endpoint.
 type greenhouseJobDetail struct {
-	ID             int64                    `json:"id"`
-	Title          string                   `json:"title"`
-	UpdatedAt      string                   `json:"updated_at"`
-	RequisitionID  string                   `json:"requisition_id"`
-	Location       greenhouseLocation       `json:"location"`
-	Content        string                   `json:"content"`
-	AbsoluteURL    string                   `json:"absolute_url"`
-	InternalJobID  int64                    `json:"internal_job_id"`
-	PayInputRanges []greenhousePayRange     `json:"pay_input_ranges"`
+	ID              int64                `json:"id"`
+	Title           string               `json:"title"`
+	UpdatedAt       string               `json:"updated_at"`
+	FirstPublished  string               `json:"first_published"`
+	RequisitionID   string               `json:"requisition_id"`
+	Location        greenhouseLocation   `json:"location"`
+	Content         string               `json:"content"`
+	AbsoluteURL     string               `json:"absolute_url"`
+	InternalJobID   int64                `json:"internal_job_id"`
+	PayInputRanges  []greenhousePayRange `json:"pay_input_ranges"`
 }
 
 type greenhousePayRange struct {
@@ -116,6 +117,7 @@ func (a *GreenhouseAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) 
 			t, err := time.Parse(time.RFC3339, gj.UpdatedAt)
 			if err == nil {
 				job.PostedAt = &t
+				job.Detail = &model.JobDetail{UpdatedAt: &t}
 			}
 		}
 
@@ -154,6 +156,46 @@ func (a *GreenhouseAdapter) fetchDetail(ctx context.Context, jobID int64) (green
 	}
 
 	return detail, nil
+}
+
+// FetchJobDetail enriches a job with data from the Greenhouse detail endpoint.
+func (a *GreenhouseAdapter) FetchJobDetail(ctx context.Context, job model.Job) (model.Job, error) {
+	var jobID int64
+	if _, err := fmt.Sscanf(job.ID, "%d", &jobID); err != nil {
+		return job, fmt.Errorf("greenhouse detail: invalid job ID %q: %w", job.ID, err)
+	}
+
+	detail, err := a.fetchDetail(ctx, jobID)
+	if err != nil {
+		return job, err
+	}
+
+	if job.Detail == nil {
+		job.Detail = &model.JobDetail{}
+	}
+
+	if detail.UpdatedAt != "" {
+		if t, err := time.Parse(time.RFC3339, detail.UpdatedAt); err == nil {
+			job.Detail.UpdatedAt = &t
+		}
+	}
+	if detail.FirstPublished != "" {
+		if t, err := time.Parse(time.RFC3339, detail.FirstPublished); err == nil {
+			job.Detail.FirstPublished = &t
+		}
+	}
+	job.Detail.RequisitionID = detail.RequisitionID
+
+	for _, pr := range detail.PayInputRanges {
+		job.Detail.PayRanges = append(job.Detail.PayRanges, model.PayRange{
+			MinCents:     pr.MinCents,
+			MaxCents:     pr.MaxCents,
+			CurrencyType: pr.CurrencyType,
+			Title:        pr.Title,
+		})
+	}
+
+	return job, nil
 }
 
 // extractText converts the Greenhouse content field to plain text.

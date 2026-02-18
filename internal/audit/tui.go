@@ -1,9 +1,11 @@
 package audit
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,6 +13,22 @@ import (
 
 	"github.com/amishk599/firstin/internal/config"
 	"github.com/amishk599/firstin/internal/model"
+)
+
+var pst = time.FixedZone("PST", -8*60*60)
+
+func fmtTimePST(t *time.Time, layout string) string {
+	return t.In(pst).Format(layout)
+}
+
+// Lines per job item in the list view (title + subtitle + blank separator).
+const jobItemHeight = 3
+
+type viewState int
+
+const (
+	viewList viewState = iota
+	viewDetail
 )
 
 var (
@@ -42,7 +60,34 @@ var (
 
 	jobSubtitleStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245"))
+
+	selectedJobTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("15")). // bright white
+				Background(lipgloss.Color("24"))  // dark blue bg
+
+	selectedJobSubtitleStyle = lipgloss.NewStyle().
+					Foreground(lipgloss.Color("252")).
+					Background(lipgloss.Color("24"))
+
+	detailLabelStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("39")).
+				Width(16)
+
+	detailValueStyle = lipgloss.NewStyle()
+
+	detailTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("15")).
+				MarginBottom(1)
 )
+
+// detailFetchedMsg is sent when an async detail fetch completes.
+type detailFetchedMsg struct {
+	job model.Job
+	err error
+}
 
 type auditModel struct {
 	allJobs       []model.Job
@@ -50,10 +95,19 @@ type auditModel struct {
 	leftViewport  viewport.Model
 	rightViewport viewport.Model
 	activePane    int // 0=left, 1=right
+	leftCursor    int
+	rightCursor   int
 	width         int
 	height        int
 	filterCfg     config.FilterConfig
 	ready         bool
+
+	// Detail view state
+	view           viewState
+	detailJob      model.Job
+	detailLoading  bool
+	detailViewport viewport.Model
+	detailFetcher  model.JobDetailFetcher
 }
 
 func (m auditModel) Init() tea.Cmd {
@@ -66,28 +120,161 @@ func (m auditModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.recalcLayout()
+		if m.view == viewDetail {
+			m.detailViewport.Width = m.width - 4
+			m.detailViewport.Height = m.height - 4
+			m.detailViewport.SetContent(m.renderDetail())
+		}
+		return m, nil
+
+	case detailFetchedMsg:
+		m.detailLoading = false
+		if msg.err != nil {
+			// Stay on detail view, show what we have
+			return m, nil
+		}
+		m.detailJob = msg.job
+		// Update the job in the list so re-entering doesn't re-fetch
+		m.updateJobInLists(msg.job)
+		m.detailViewport.SetContent(m.renderDetail())
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		case "tab", "left", "right":
-			m.activePane = 1 - m.activePane
-			return m, nil
+		if m.view == viewDetail {
+			return m.updateDetailView(msg)
 		}
-
-		// Forward scroll keys to the active viewport.
-		var cmd tea.Cmd
-		if m.activePane == 0 {
-			m.leftViewport, cmd = m.leftViewport.Update(msg)
-		} else {
-			m.rightViewport, cmd = m.rightViewport.Update(msg)
-		}
-		return m, cmd
+		return m.updateListView(msg)
 	}
 
 	return m, nil
+}
+
+func (m auditModel) updateListView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "tab", "left", "right":
+		m.activePane = 1 - m.activePane
+		m.recalcContent()
+		return m, nil
+	case "up", "k":
+		m.moveCursor(-1)
+		m.recalcContent()
+		m.ensureCursorVisible()
+		return m, nil
+	case "down", "j":
+		m.moveCursor(1)
+		m.recalcContent()
+		m.ensureCursorVisible()
+		return m, nil
+	case "enter":
+		return m.openDetailView()
+	}
+
+	// Forward other keys (pgup/pgdn/home/end) to the active viewport.
+	var cmd tea.Cmd
+	if m.activePane == 0 {
+		m.leftViewport, cmd = m.leftViewport.Update(msg)
+	} else {
+		m.rightViewport, cmd = m.rightViewport.Update(msg)
+	}
+	return m, cmd
+}
+
+func (m auditModel) updateDetailView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "esc", "backspace":
+		m.view = viewList
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.detailViewport, cmd = m.detailViewport.Update(msg)
+	return m, cmd
+}
+
+func (m *auditModel) moveCursor(delta int) {
+	if m.activePane == 0 {
+		m.leftCursor = clamp(m.leftCursor+delta, 0, max(len(m.allJobs)-1, 0))
+	} else {
+		m.rightCursor = clamp(m.rightCursor+delta, 0, max(len(m.matchedJobs)-1, 0))
+	}
+}
+
+func (m *auditModel) ensureCursorVisible() {
+	var vp *viewport.Model
+	var cursor int
+	if m.activePane == 0 {
+		vp = &m.leftViewport
+		cursor = m.leftCursor
+	} else {
+		vp = &m.rightViewport
+		cursor = m.rightCursor
+	}
+
+	cursorTop := cursor * jobItemHeight
+	cursorBottom := cursorTop + jobItemHeight - 1
+
+	if cursorTop < vp.YOffset {
+		vp.SetYOffset(cursorTop)
+	} else if cursorBottom >= vp.YOffset+vp.Height {
+		vp.SetYOffset(cursorBottom - vp.Height + 1)
+	}
+}
+
+func (m auditModel) openDetailView() (tea.Model, tea.Cmd) {
+	jobs := m.activeJobs()
+	cursor := m.activeCursor()
+	if len(jobs) == 0 {
+		return m, nil
+	}
+
+	job := jobs[cursor]
+	m.view = viewDetail
+	m.detailJob = job
+	m.detailViewport = viewport.New(m.width-4, m.height-4)
+	m.detailViewport.SetContent(m.renderDetail())
+
+	// If we have a detail fetcher and the job lacks enriched detail, fetch it
+	if m.detailFetcher != nil && !hasEnrichedDetail(job) {
+		m.detailLoading = true
+		return m, m.fetchDetailCmd(job)
+	}
+
+	return m, nil
+}
+
+func (m auditModel) fetchDetailCmd(job model.Job) tea.Cmd {
+	fetcher := m.detailFetcher
+	return func() tea.Msg {
+		enriched, err := fetcher.FetchJobDetail(context.Background(), job)
+		return detailFetchedMsg{job: enriched, err: err}
+	}
+}
+
+func (m *auditModel) updateJobInLists(job model.Job) {
+	for i := range m.allJobs {
+		if m.allJobs[i].ID == job.ID {
+			m.allJobs[i] = job
+			break
+		}
+	}
+	for i := range m.matchedJobs {
+		if m.matchedJobs[i].ID == job.ID {
+			m.matchedJobs[i] = job
+			break
+		}
+	}
+}
+
+func hasEnrichedDetail(job model.Job) bool {
+	if job.Detail == nil {
+		return false
+	}
+	d := job.Detail
+	return d.RequisitionID != "" || len(d.PayRanges) > 0 || d.ApplyURL != ""
 }
 
 func (m *auditModel) recalcLayout() {
@@ -108,8 +295,26 @@ func (m *auditModel) recalcLayout() {
 		m.rightViewport.Height = paneHeight
 	}
 
-	m.leftViewport.SetContent(renderJobs(m.allJobs))
-	m.rightViewport.SetContent(renderJobs(m.matchedJobs))
+	m.recalcContent()
+}
+
+func (m *auditModel) recalcContent() {
+	m.leftViewport.SetContent(renderJobs(m.allJobs, m.leftCursor, m.activePane == 0))
+	m.rightViewport.SetContent(renderJobs(m.matchedJobs, m.rightCursor, m.activePane == 1))
+}
+
+func (m auditModel) activeJobs() []model.Job {
+	if m.activePane == 0 {
+		return m.allJobs
+	}
+	return m.matchedJobs
+}
+
+func (m auditModel) activeCursor() int {
+	if m.activePane == 0 {
+		return m.leftCursor
+	}
+	return m.rightCursor
 }
 
 func (m auditModel) View() string {
@@ -117,6 +322,14 @@ func (m auditModel) View() string {
 		return "Initializing..."
 	}
 
+	if m.view == viewDetail {
+		return m.viewDetail()
+	}
+
+	return m.viewList()
+}
+
+func (m auditModel) viewList() string {
 	paneWidth := m.leftViewport.Width
 
 	// Headers.
@@ -154,30 +367,135 @@ func (m auditModel) View() string {
 
 	// Status bar.
 	filteredCount := len(m.allJobs) - len(m.matchedJobs)
-	statusText := fmt.Sprintf(" %d total | %d matched | %d filtered out    ←/→/Tab switch pane  ↑/↓/j/k scroll  q quit",
+	statusText := fmt.Sprintf(" %d total | %d matched | %d filtered out    ←/→/Tab switch  ↑/↓/j/k cursor  Enter detail  q quit",
 		len(m.allJobs), len(m.matchedJobs), filteredCount)
 	statusBar := statusBarStyle.Width(m.width).Render(statusText)
 
 	return headerRow + "\n" + panes + "\n" + statusBar
 }
 
-func renderJobs(jobs []model.Job) string {
+func (m auditModel) viewDetail() string {
+	title := detailTitleStyle.Render("Job Details")
+	if m.detailLoading {
+		title += "  (loading...)"
+	}
+
+	border := activeBorderStyle.Width(m.width - 2)
+	content := border.Render(m.detailViewport.View())
+
+	statusText := " esc/backspace go back  ↑/↓ scroll  q quit"
+	statusBar := statusBarStyle.Width(m.width).Render(statusText)
+
+	return title + "\n" + content + "\n" + statusBar
+}
+
+func (m auditModel) renderDetail() string {
+	j := m.detailJob
+	var b strings.Builder
+
+	addField := func(label, value string) {
+		if value == "" {
+			return
+		}
+		b.WriteString(detailLabelStyle.Render(label))
+		b.WriteString(detailValueStyle.Render(value))
+		b.WriteByte('\n')
+	}
+
+	addField("Title", j.Title)
+	addField("Company", j.Company)
+	addField("Location", j.Location)
+	addField("Job ID", j.ID)
+	addField("Source", j.Source)
+
+	b.WriteByte('\n')
+
+	if j.PostedAt != nil {
+		addField("Posted At", fmtTimePST(j.PostedAt, "2006-01-02 15:04 MST"))
+	}
+
+	if j.Detail != nil {
+		d := j.Detail
+
+		if d.UpdatedAt != nil {
+			addField("Updated At", fmtTimePST(d.UpdatedAt, "2006-01-02 15:04 MST"))
+		}
+		if d.FirstPublished != nil {
+			addField("First Published", fmtTimePST(d.FirstPublished, "2006-01-02 15:04 MST"))
+		}
+		if d.StartDate != nil {
+			addField("Start Date", fmtTimePST(d.StartDate, "2006-01-02 MST"))
+		}
+		if d.PublishedAt != nil {
+			addField("Published At", fmtTimePST(d.PublishedAt, "2006-01-02 15:04 MST"))
+		}
+		if d.PostedOn != "" {
+			addField("Posted On", d.PostedOn)
+		}
+		if d.RequisitionID != "" {
+			addField("Requisition ID", d.RequisitionID)
+		}
+
+		if len(d.PayRanges) > 0 {
+			b.WriteByte('\n')
+			for _, pr := range d.PayRanges {
+				rangeStr := formatPayRange(pr)
+				label := "Pay Range"
+				if pr.Title != "" {
+					label = pr.Title
+				}
+				addField(label, rangeStr)
+			}
+		}
+	}
+
+	b.WriteByte('\n')
+	addField("Job URL", j.URL)
+	if j.Detail != nil && j.Detail.ApplyURL != "" && j.Detail.ApplyURL != j.URL {
+		addField("Apply URL", j.Detail.ApplyURL)
+	}
+
+	return b.String()
+}
+
+func formatPayRange(pr model.PayRange) string {
+	minDollars := float64(pr.MinCents) / 100
+	maxDollars := float64(pr.MaxCents) / 100
+	currency := pr.CurrencyType
+	if currency == "" {
+		currency = "USD"
+	}
+	return fmt.Sprintf("%s $%.0f - $%.0f", currency, minDollars, maxDollars)
+}
+
+func renderJobs(jobs []model.Job, cursor int, isActive bool) string {
 	if len(jobs) == 0 {
 		return "  (no jobs)"
 	}
 
 	var b strings.Builder
 	for i, j := range jobs {
-		title := jobTitleStyle.Render(j.Title)
-		b.WriteString(title)
+		isSelected := isActive && i == cursor
+
+		titleSt := jobTitleStyle
+		subtitleSt := jobSubtitleStyle
+		prefix := "  "
+		if isSelected {
+			titleSt = selectedJobTitleStyle
+			subtitleSt = selectedJobSubtitleStyle
+			prefix = "> "
+		}
+
+		b.WriteString(prefix)
+		b.WriteString(titleSt.Render(j.Title))
 		b.WriteByte('\n')
 
 		posted := "n/a"
 		if j.PostedAt != nil {
 			posted = j.PostedAt.Format("2006-01-02")
 		}
-		subtitle := jobSubtitleStyle.Render(fmt.Sprintf("%s · %s", j.Location, posted))
-		b.WriteString(subtitle)
+		b.WriteString(prefix)
+		b.WriteString(subtitleSt.Render(fmt.Sprintf("%s · %s", j.Location, posted)))
 		b.WriteByte('\n')
 
 		if i < len(jobs)-1 {
@@ -202,15 +520,27 @@ func sortJobsByDate(jobs []model.Job) {
 	})
 }
 
+func clamp(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
 // RunAuditTUI launches the interactive split-pane audit TUI.
-func RunAuditTUI(allJobs, matchedJobs []model.Job, filterCfg config.FilterConfig) error {
+// detailFetcher may be nil for adapters that don't support on-demand detail fetching.
+func RunAuditTUI(allJobs, matchedJobs []model.Job, filterCfg config.FilterConfig, detailFetcher model.JobDetailFetcher) error {
 	sortJobsByDate(allJobs)
 	sortJobsByDate(matchedJobs)
 
 	m := auditModel{
-		allJobs:     allJobs,
-		matchedJobs: matchedJobs,
-		filterCfg:   filterCfg,
+		allJobs:       allJobs,
+		matchedJobs:   matchedJobs,
+		filterCfg:     filterCfg,
+		detailFetcher: detailFetcher,
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
