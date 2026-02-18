@@ -126,6 +126,110 @@ func TestFetchJobs_HTTPError(t *testing.T) {
 	}
 }
 
+func TestFetchDetail_Success(t *testing.T) {
+	payload := `{
+		"id": 44444,
+		"title": "Product Engineer",
+		"updated_at": "2026-02-13T10:00:00Z",
+		"requisition_id": "50",
+		"location": {"name": "San Francisco, CA"},
+		"content": "&lt;p&gt;This is the job description.&lt;/p&gt;",
+		"absolute_url": "https://your.co/careers?gh_jid=44444",
+		"internal_job_id": 55555,
+		"pay_input_ranges": [
+			{
+				"min_cents": 5000000,
+				"max_cents": 7500000,
+				"currency_type": "USD",
+				"title": "NYC Salary Range",
+				"blurb": "In order to provide transparency..."
+			}
+		]
+	}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/boards/acme/jobs/44444" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(payload))
+	}))
+	defer srv.Close()
+
+	a := newTestAdapter(srv, "acme", "Acme Corp")
+	detail, err := a.fetchDetail(context.Background(), 44444)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if detail.ID != 44444 {
+		t.Errorf("expected ID 44444, got %d", detail.ID)
+	}
+	if detail.Title != "Product Engineer" {
+		t.Errorf("expected title Product Engineer, got %s", detail.Title)
+	}
+	if detail.Location.Name != "San Francisco, CA" {
+		t.Errorf("expected location San Francisco, CA, got %s", detail.Location.Name)
+	}
+	if detail.RequisitionID != "50" {
+		t.Errorf("expected requisition ID 50, got %s", detail.RequisitionID)
+	}
+	if len(detail.PayInputRanges) != 1 || detail.PayInputRanges[0].MinCents != 5000000 {
+		t.Errorf("unexpected pay ranges: %+v", detail.PayInputRanges)
+	}
+}
+
+func TestFetchDetail_HTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	a := newTestAdapter(srv, "acme", "Acme Corp")
+	_, err := a.fetchDetail(context.Background(), 99999)
+	if err == nil {
+		t.Fatal("expected error for HTTP 404, got nil")
+	}
+}
+
+func TestExtractText(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "double-encoded HTML from Greenhouse API",
+			input: "This is the job description. &lt;p&gt;Any HTML included.&lt;/p&gt;",
+			want:  "This is the job description. Any HTML included.",
+		},
+		{
+			name:  "typical job description with nested tags and whitespace",
+			input: "&lt;p&gt;We are hiring.&lt;/p&gt;\n&lt;ul&gt;\n  &lt;li&gt;Write code&lt;/li&gt;\n  &lt;li&gt;Review PRs&lt;/li&gt;\n&lt;/ul&gt;",
+			want:  "We are hiring. Write code Review PRs",
+		},
+		{
+			name:  "plain text with no HTML",
+			input: "No tags here.",
+			want:  "No tags here.",
+		},
+		{
+			name:  "empty string",
+			input: "",
+			want:  "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := extractText(tc.input)
+			if got != tc.want {
+				t.Errorf("extractText(%q)\n got  %q\n want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
 // --- helpers ---
 
 // roundTripFunc adapts a function into an http.RoundTripper.

@@ -4,13 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/amishk599/firstin/internal/model"
 )
 
 const greenhouseBaseURL = "https://boards-api.greenhouse.io/v1/boards"
+
+var htmlTagRegex = regexp.MustCompile(`<[^>]*>`)
 
 // greenhouseJob represents a single job in the Greenhouse API response.
 type greenhouseJob struct {
@@ -28,6 +33,27 @@ type greenhouseLocation struct {
 // greenhouseResponse is the top-level Greenhouse jobs API response.
 type greenhouseResponse struct {
 	Jobs []greenhouseJob `json:"jobs"`
+}
+
+// greenhouseJobDetail is the response from the Greenhouse job detail endpoint.
+type greenhouseJobDetail struct {
+	ID             int64                    `json:"id"`
+	Title          string                   `json:"title"`
+	UpdatedAt      string                   `json:"updated_at"`
+	RequisitionID  string                   `json:"requisition_id"`
+	Location       greenhouseLocation       `json:"location"`
+	Content        string                   `json:"content"`
+	AbsoluteURL    string                   `json:"absolute_url"`
+	InternalJobID  int64                    `json:"internal_job_id"`
+	PayInputRanges []greenhousePayRange     `json:"pay_input_ranges"`
+}
+
+type greenhousePayRange struct {
+	MinCents     int64  `json:"min_cents"`
+	MaxCents     int64  `json:"max_cents"`
+	CurrencyType string `json:"currency_type"`
+	Title        string `json:"title"`
+	Blurb        string `json:"blurb"`
 }
 
 // GreenhouseAdapter fetches jobs from the Greenhouse public boards API.
@@ -97,4 +123,45 @@ func (a *GreenhouseAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) 
 	}
 
 	return jobs, nil
+}
+
+// fetchDetail retrieves full job details from the Greenhouse job detail endpoint.
+func (a *GreenhouseAdapter) fetchDetail(ctx context.Context, jobID int64) (greenhouseJobDetail, error) {
+	url := fmt.Sprintf("%s/%s/jobs/%d", greenhouseBaseURL, a.boardToken, jobID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return greenhouseJobDetail{}, fmt.Errorf("greenhouse detail request for %s job %d: %w", a.companyName, jobID, err)
+	}
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return greenhouseJobDetail{}, fmt.Errorf("greenhouse detail fetch for %s job %d: %w", a.companyName, jobID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return greenhouseJobDetail{}, &model.HTTPError{
+			StatusCode: resp.StatusCode,
+			RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
+			Err:        fmt.Errorf("greenhouse detail fetch for %s job %d: unexpected status %d", a.companyName, jobID, resp.StatusCode),
+		}
+	}
+
+	var detail greenhouseJobDetail
+	if err := json.NewDecoder(resp.Body).Decode(&detail); err != nil {
+		return greenhouseJobDetail{}, fmt.Errorf("greenhouse detail decode for %s job %d: %w", a.companyName, jobID, err)
+	}
+
+	return detail, nil
+}
+
+// extractText converts the Greenhouse content field to plain text.
+// The content is HTML-encoded HTML (e.g. "&lt;p&gt;" in the JSON string), so
+// we first unescape entities to get real HTML, then strip all tags and
+// collapse leftover whitespace into a single clean string.
+func extractText(content string) string {
+	unescaped := html.UnescapeString(content)
+	plain := htmlTagRegex.ReplaceAllString(unescaped, "")
+	return strings.Join(strings.Fields(plain), " ")
 }
