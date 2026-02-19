@@ -251,7 +251,9 @@ func (a *WorkdayAdapter) fetchDetail(ctx context.Context, listing workdayListing
 		ApplyURL: info.ExternalURL,
 	}
 
-	// Prefer startDate (format "2006-01-02"), fall back to postedOn parsing
+	// Workday exposes no absolute publish timestamp at the list level.
+	// Prefer startDate from the detail endpoint (exact date); fall back to
+	// parsePostedOn which approximates "Posted N Days Ago" to midnight UTC.
 	if info.StartDate != "" {
 		if t, err := time.Parse("2006-01-02", info.StartDate); err == nil {
 			job.PostedAt = &t

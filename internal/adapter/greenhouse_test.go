@@ -15,6 +15,7 @@ func TestFetchJobs_Success(t *testing.T) {
 				"title": "Software Engineer",
 				"location": {"name": "San Francisco, CA"},
 				"absolute_url": "https://boards.greenhouse.io/acme/jobs/12345",
+				"first_published": "2026-02-10T09:00:00Z",
 				"updated_at": "2026-02-13T10:00:00Z"
 			},
 			{
@@ -22,6 +23,7 @@ func TestFetchJobs_Success(t *testing.T) {
 				"title": "Backend Engineer",
 				"location": {"name": "Remote, US"},
 				"absolute_url": "https://boards.greenhouse.io/acme/jobs/67890",
+				"first_published": "2026-02-11T14:00:00Z",
 				"updated_at": "2026-02-13T11:30:00Z"
 			}
 		]
@@ -74,7 +76,7 @@ func TestFetchJobs_Success(t *testing.T) {
 	if j.PostedAt == nil {
 		t.Fatal("expected PostedAt to be set")
 	}
-	if j.PostedAt.Year() != 2026 || j.PostedAt.Month() != 2 || j.PostedAt.Day() != 13 {
+	if j.PostedAt.Year() != 2026 || j.PostedAt.Month() != 2 || j.PostedAt.Day() != 10 {
 		t.Errorf("unexpected PostedAt: %v", j.PostedAt)
 	}
 }

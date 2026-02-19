@@ -19,11 +19,12 @@ var htmlTagRegex = regexp.MustCompile(`<[^>]*>`)
 
 // greenhouseJob represents a single job in the Greenhouse API response.
 type greenhouseJob struct {
-	ID          int64             `json:"id"`
-	Title       string            `json:"title"`
-	Location    greenhouseLocation `json:"location"`
-	AbsoluteURL string            `json:"absolute_url"`
-	UpdatedAt   string            `json:"updated_at"`
+	ID             int64              `json:"id"`
+	Title          string             `json:"title"`
+	Location       greenhouseLocation `json:"location"`
+	AbsoluteURL    string             `json:"absolute_url"`
+	UpdatedAt      string             `json:"updated_at"`
+	FirstPublished string             `json:"first_published"`
 }
 
 type greenhouseLocation struct {
@@ -113,10 +114,16 @@ func (a *GreenhouseAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) 
 			Source:   "greenhouse",
 		}
 
-		if gj.UpdatedAt != "" {
-			t, err := time.Parse(time.RFC3339, gj.UpdatedAt)
-			if err == nil {
+		// Use first_published (not updated_at) as the freshness signal.
+		// updated_at changes on any record mutation (bulk edits, compliance
+		// updates, syncs) and must not be treated as a publication timestamp.
+		if gj.FirstPublished != "" {
+			if t, err := time.Parse(time.RFC3339, gj.FirstPublished); err == nil {
 				job.PostedAt = &t
+			}
+		}
+		if gj.UpdatedAt != "" {
+			if t, err := time.Parse(time.RFC3339, gj.UpdatedAt); err == nil {
 				job.Detail = &model.JobDetail{UpdatedAt: &t}
 			}
 		}
