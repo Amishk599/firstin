@@ -11,7 +11,22 @@ import (
 	"github.com/amishk599/firstin/internal/config"
 )
 
+const pickerASCIIArt = `███████╗██╗██████╗ ███████╗████████╗██╗███╗   ██╗
+██╔════╝██║██╔══██╗██╔════╝╚══██╔══╝██║████╗  ██║
+█████╗  ██║██████╔╝███████╗   ██║   ██║██╔██╗ ██║
+██╔══╝  ██║██╔══██╗╚════██║   ██║   ██║██║╚██╗██║
+██║     ██║██║  ██║███████║   ██║   ██║██║ ╚████║
+╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝╚═╝  ╚═══╝`
+
 var (
+	pickerBannerStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("33")).
+				Padding(1, 0, 0, 2)
+
+	pickerSubtitleStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("240")).
+				Padding(0, 0, 0, 2)
+
 	pickerTitleStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("39")).
@@ -67,7 +82,9 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m pickerModel) View() string {
-	s := pickerTitleStyle.Render("Filter Audit — Select a company")
+	s := pickerBannerStyle.Render(pickerASCIIArt) + "\n"
+	s += pickerSubtitleStyle.Render("job radar · be first in the door") + "\n"
+	s += pickerTitleStyle.Render("Filter Audit — Select a company")
 	s += "\n"
 
 	for i, c := range m.companies {
