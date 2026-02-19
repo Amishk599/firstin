@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -53,57 +52,59 @@ func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) 
 		return
 	}
 
-	choice, err := audit.RunCompanyPicker(enabled)
-	if err != nil {
-		fmt.Printf("Picker error: %v\n", err)
-		return
-	}
-	if choice < 0 {
-		return
-	}
-	company := enabled[choice]
-
-	fetcher, ok := createFetcher(company, httpClient, nil, logger)
-	if !ok {
-		fmt.Printf("Unsupported ATS: %s\n", company.ATS)
-		return
-	}
-	// In audit mode, Workday adapter should return all listings (not just fresh ones)
-	// but only detail-fetch the fresh ones to save API calls.
-	if wa, ok := fetcher.(*adapter.WorkdayAdapter); ok {
-		wa.SetAuditMode(true)
-	}
-
-	fmt.Printf("\nFetching jobs from %s...\n", company.Name)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	jobs, err := fetcher.FetchJobs(ctx)
-	if err != nil {
-		fmt.Printf("Error fetching jobs: %v\n", err)
-		return
-	}
-	fmt.Printf("Fetched %d jobs.\n", len(jobs))
-
-	jobFilter := filter.NewTitleAndLocationFilter(
-		cfg.Filters.TitleKeywords,
-		cfg.Filters.TitleExcludeKeywords,
-		cfg.Filters.Locations,
-		cfg.Filters.ExcludeLocations,
-	)
-	var matched []model.Job
-	for _, j := range jobs {
-		if jobFilter.Match(j) {
-			matched = append(matched, j)
+	for {
+		choice, err := audit.RunCompanyPicker(enabled)
+		if err != nil {
+			fmt.Printf("Picker error: %v\n", err)
+			return
 		}
-	}
+		if choice < 0 {
+			return
+		}
+		company := enabled[choice]
 
-	var detailFetcher model.JobDetailFetcher
-	if df, ok := fetcher.(model.JobDetailFetcher); ok {
-		detailFetcher = df
-	}
+		fetcher, ok := createFetcher(company, httpClient, nil, logger)
+		if !ok {
+			fmt.Printf("Unsupported ATS: %s\n", company.ATS)
+			continue
+		}
+		// In audit mode, Workday adapter should return all listings (not just fresh ones)
+		// but only detail-fetch the fresh ones to save API calls.
+		if wa, ok := fetcher.(*adapter.WorkdayAdapter); ok {
+			wa.SetAuditMode(true)
+		}
 
-	if err := audit.RunAuditTUI(jobs, matched, cfg.Filters, detailFetcher); err != nil {
-		fmt.Printf("TUI error: %v\n", err)
+		jobs, err := audit.RunLoader(company.Name, fetcher.FetchJobs)
+		if err != nil {
+			fmt.Printf("Error fetching jobs: %v\n", err)
+			continue
+		}
+
+		jobFilter := filter.NewTitleAndLocationFilter(
+			cfg.Filters.TitleKeywords,
+			cfg.Filters.TitleExcludeKeywords,
+			cfg.Filters.Locations,
+			cfg.Filters.ExcludeLocations,
+		)
+		var matched []model.Job
+		for _, j := range jobs {
+			if jobFilter.Match(j) {
+				matched = append(matched, j)
+			}
+		}
+
+		var detailFetcher model.JobDetailFetcher
+		if df, ok := fetcher.(model.JobDetailFetcher); ok {
+			detailFetcher = df
+		}
+
+		wantQuit, err := audit.RunAuditTUI(jobs, matched, cfg.Filters, detailFetcher)
+		if err != nil {
+			fmt.Printf("TUI error: %v\n", err)
+		}
+		if wantQuit {
+			return
+		}
+		// else: loop → back to picker
 	}
 }

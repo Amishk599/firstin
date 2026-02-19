@@ -66,13 +66,9 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.chosen = -2
 			return m, tea.Quit
 		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
+			m.cursor = (m.cursor - 1 + len(m.companies)) % len(m.companies)
 		case "down", "j":
-			if m.cursor < len(m.companies)-1 {
-				m.cursor++
-			}
+			m.cursor = (m.cursor + 1) % len(m.companies)
 		case "enter":
 			m.chosen = m.cursor
 			return m, tea.Quit

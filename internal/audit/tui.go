@@ -3,6 +3,8 @@ package audit
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -108,6 +110,8 @@ type auditModel struct {
 	detailLoading  bool
 	detailViewport viewport.Model
 	detailFetcher  model.JobDetailFetcher
+
+	wantQuit bool
 }
 
 func (m auditModel) Init() tea.Cmd {
@@ -152,6 +156,10 @@ func (m auditModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m auditModel) updateListView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
+		m.wantQuit = true
+		return m, tea.Quit
+	case "esc", "b":
+		m.wantQuit = false
 		return m, tea.Quit
 	case "tab", "left", "right":
 		m.activePane = 1 - m.activePane
@@ -184,9 +192,17 @@ func (m auditModel) updateListView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m auditModel) updateDetailView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
+		m.wantQuit = true
 		return m, tea.Quit
 	case "esc", "backspace":
 		m.view = viewList
+		return m, nil
+	case "o":
+		url := m.detailJob.URL
+		if m.detailJob.Detail != nil && m.detailJob.Detail.ApplyURL != "" {
+			url = m.detailJob.Detail.ApplyURL
+		}
+		openURL(url)
 		return m, nil
 	}
 
@@ -367,7 +383,7 @@ func (m auditModel) viewList() string {
 
 	// Status bar.
 	filteredCount := len(m.allJobs) - len(m.matchedJobs)
-	statusText := fmt.Sprintf(" %d total | %d matched | %d filtered out    ←/→/Tab switch  ↑/↓/j/k cursor  Enter detail  q quit",
+	statusText := fmt.Sprintf(" %d total | %d matched | %d filtered out    ←/→/Tab switch  ↑/↓ cursor  Enter detail  Esc back  q quit",
 		len(m.allJobs), len(m.matchedJobs), filteredCount)
 	statusBar := statusBarStyle.Width(m.width).Render(statusText)
 
@@ -383,7 +399,7 @@ func (m auditModel) viewDetail() string {
 	border := activeBorderStyle.Width(m.width - 2)
 	content := border.Render(m.detailViewport.View())
 
-	statusText := " esc/backspace go back  ↑/↓ scroll  q quit"
+	statusText := " o open URL  esc/backspace back  ↑/↓ scroll  q quit"
 	statusBar := statusBarStyle.Width(m.width).Render(statusText)
 
 	return title + "\n" + content + "\n" + statusBar
@@ -530,9 +546,26 @@ func clamp(v, lo, hi int) int {
 	return v
 }
 
+// openURL opens url in the default system browser, fire-and-forget.
+func openURL(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", url)
+	default:
+		return
+	}
+	_ = cmd.Start()
+}
+
 // RunAuditTUI launches the interactive split-pane audit TUI.
 // detailFetcher may be nil for adapters that don't support on-demand detail fetching.
-func RunAuditTUI(allJobs, matchedJobs []model.Job, filterCfg config.FilterConfig, detailFetcher model.JobDetailFetcher) error {
+// Returns wantQuit=true if the user pressed q/ctrl+c, false if they pressed esc to return to the picker.
+func RunAuditTUI(allJobs, matchedJobs []model.Job, filterCfg config.FilterConfig, detailFetcher model.JobDetailFetcher) (bool, error) {
 	sortJobsByDate(allJobs)
 	sortJobsByDate(matchedJobs)
 
@@ -544,6 +577,10 @@ func RunAuditTUI(allJobs, matchedJobs []model.Job, filterCfg config.FilterConfig
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	_, err := p.Run()
-	return err
+	result, err := p.Run()
+	if err != nil {
+		return false, err
+	}
+	final := result.(auditModel)
+	return final.wantQuit, nil
 }
