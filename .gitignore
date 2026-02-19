@@ -3,4 +3,5 @@ jobs.db
 *.test
 .DS_Store
 plan.md
+CLAUDE.md
 docs/internal/
