@@ -222,5 +222,15 @@ companies:
     board_token: "whatnot"
     enabled: true
 
-# TODO: add gem ATS
+  - name: retool
+    ats: gem
+    board_token: "retool"
+    enabled: true
+
+  - name: lumalabs
+    ats: gem
+    board_token: "lumalabs-ai"
+    enabled: true
+
+# TODO: add greenhouse: lyft, xai, affirm, playstation, vanta
 # TODO: add greenhouse: lyft, xai, affirm, playstation, vanta

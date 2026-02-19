@@ -73,6 +73,8 @@ func createFetcher(company config.CompanyConfig, httpClient *http.Client, jobFil
 		return adapter.NewAshbyAdapter(company.BoardToken, company.Name, httpClient), true
 	case "lever":
 		return adapter.NewLeverAdapter(company.BoardToken, company.Name, httpClient), true
+	case "gem":
+		return adapter.NewGemAdapter(company.BoardToken, company.Name, httpClient), true
 	case "workday":
 		return adapter.NewWorkdayAdapter(company.WorkdayURL, company.Name, httpClient, jobFilter), true
 	default:
