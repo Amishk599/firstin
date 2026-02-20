@@ -48,10 +48,19 @@ var (
 			Foreground(lipgloss.Color("238"))
 )
 
+// fixedPickerLines is the number of lines consumed by the banner, subtitle,
+// title, and hint — everything except the scrollable company list.
+// banner: 1 top-pad + 6 ASCII lines + 1 trailing \n = 8
+// subtitle: 1 line + 1 trailing \n                   = 2
+// title: 1 top-pad + 1 line + 1 bottom-pad + 1 \n   = 4
+// hint: 1 top-pad + 1 line                           = 2
+const fixedPickerLines = 16
+
 type pickerModel struct {
 	companies []config.CompanyConfig
 	cursor    int
 	chosen    int // -1 = no choice yet, -2 = quit
+	height    int
 }
 
 func (m pickerModel) Init() tea.Cmd {
@@ -60,6 +69,9 @@ func (m pickerModel) Init() tea.Cmd {
 
 func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.height = msg.Height
+		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -78,24 +90,46 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m pickerModel) View() string {
-	s := pickerBannerStyle.Render(pickerASCIIArt) + "\n"
-	s += pickerSubtitleStyle.Render("job radar · be first in the door") + "\n"
-	s += pickerTitleStyle.Render("Filter Audit — Select a company")
-	s += "\n"
+	header := pickerBannerStyle.Render(pickerASCIIArt) + "\n"
+	header += pickerSubtitleStyle.Render("job radar · be first in the door") + "\n"
+	header += pickerTitleStyle.Render("Filter Audit — Select a company") + "\n"
+	hint := pickerHintStyle.Render("↑/↓/j/k navigate  enter select  q quit")
 
-	for i, c := range m.companies {
-		num := fmt.Sprintf("%2d.", i+1)
-		ats := pickerATSStyle.Render(fmt.Sprintf("(%s)", c.ATS))
-		label := fmt.Sprintf("%s %s %s", num, c.Name, ats)
-		if i == m.cursor {
-			s += pickerSelectedStyle.Render("> "+label) + "\n"
-		} else {
-			s += pickerItemStyle.Render(label) + "\n"
+	// Determine how many list rows fit between the header and hint.
+	available := len(m.companies)
+	if m.height > 0 {
+		available = m.height - fixedPickerLines
+		if available < 1 {
+			available = 1
 		}
 	}
 
-	s += pickerHintStyle.Render("↑/↓/j/k navigate  enter select  q quit")
-	return s
+	// Compute scroll offset so the cursor row is always visible.
+	scrollOffset := 0
+	if m.cursor >= available {
+		scrollOffset = m.cursor - available + 1
+	}
+
+	end := scrollOffset + available
+	if end > len(m.companies) {
+		end = len(m.companies)
+	}
+
+	var list strings.Builder
+	for i := scrollOffset; i < end; i++ {
+		c := m.companies[i]
+		num := fmt.Sprintf("%2d.", i+1)
+		ats := pickerATSStyle.Render(fmt.Sprintf("(%s)", c.ATS))
+		displayName := strings.ToUpper(c.Name[:1]) + c.Name[1:]
+		label := fmt.Sprintf("%s %s %s", num, displayName, ats)
+		if i == m.cursor {
+			list.WriteString(pickerSelectedStyle.Render("> "+label) + "\n")
+		} else {
+			list.WriteString(pickerItemStyle.Render(label) + "\n")
+		}
+	}
+
+	return header + list.String() + hint
 }
 
 // RunCompanyPicker shows an interactive company selector.
@@ -110,7 +144,7 @@ func RunCompanyPicker(companies []config.CompanyConfig) (int, error) {
 		chosen:    -1,
 	}
 
-	p := tea.NewProgram(m)
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	result, err := p.Run()
 	if err != nil {
 		return -1, err
