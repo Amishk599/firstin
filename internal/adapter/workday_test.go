@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -141,38 +142,25 @@ func TestWorkdayFetchJobs_PaginationContinuesWhenLastIsFresh(t *testing.T) {
 	}
 }
 
-func TestWorkdayFetchJobs_PaginationStopsWhenLastIsStale(t *testing.T) {
+func TestWorkdayFetchJobs_PaginationStopsWhenWholePageIsStale(t *testing.T) {
 	postCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost {
 			postCount++
-			// First page: last listing is stale → should NOT fetch page 2
+			// Every listing on the page is stale → should stop after page 1.
+			// Previously the early exit only checked the last entry, which missed
+			// fresh jobs earlier on the page when Workday uses non-chronological
+			// ordering. Now the whole page must be stale to trigger early exit.
 			listings := make([]workdayListing, 20)
-			for i := range 19 {
+			for i := range 20 {
 				listings[i] = workdayListing{
-					Title:        fmt.Sprintf("Fresh Job %d", i),
-					ExternalPath: fmt.Sprintf("job/Fresh-%d/JR%d", i, i),
-					PostedOn:     "Posted Today",
+					Title:    fmt.Sprintf("Old Job %d", i),
+					PostedOn: "Posted 7 Days Ago",
 				}
-			}
-			listings[19] = workdayListing{
-				Title:    "Old Job",
-				PostedOn: "Posted 7 Days Ago",
 			}
 			resp := workdayListingResponse{Total: 100, JobPostings: listings}
 			json.NewEncoder(w).Encode(resp)
-		} else {
-			detail := workdayDetailResponse{
-				JobPostingInfo: workdayJobDetail{
-					JobReqID:    "JR001",
-					Title:       "Some Job",
-					Location:    "Remote",
-					ExternalURL: "https://example.com/job",
-					StartDate:   "2026-02-17",
-				},
-			}
-			json.NewEncoder(w).Encode(detail)
 		}
 	}))
 	defer srv.Close()
@@ -184,7 +172,7 @@ func TestWorkdayFetchJobs_PaginationStopsWhenLastIsStale(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if postCount != 1 {
-		t.Errorf("expected 1 POST request (early exit: last listing was stale), got %d", postCount)
+		t.Errorf("expected 1 POST request (early exit: entire page was stale), got %d", postCount)
 	}
 }
 
@@ -359,7 +347,7 @@ func newWorkdayTestAdapter(srv *httptest.Server, company string) *WorkdayAdapter
 }
 
 func newWorkdayTestAdapterWithFilter(srv *httptest.Server, company string, preFilter model.JobFilter) *WorkdayAdapter {
-	a := NewWorkdayAdapter(srv.URL, company, srv.Client(), preFilter)
+	a := NewWorkdayAdapter(srv.URL, company, srv.Client(), preFilter, slog.Default())
 	a.client = &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			req.URL.Scheme = "http"

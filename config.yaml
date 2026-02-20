@@ -286,3 +286,18 @@ companies:
     ats: workday
     workday_url: "https://adobe.wd5.myworkdayjobs.com/wday/cxs/adobe/external_experienced"
     enabled: true
+
+  - name: notion
+    ats: ashby
+    board_token: "notion"
+    enabled: true
+
+  - name: stubhubinc
+    ats: greenhouse
+    board_token: "stubhubinc"
+    enabled: true
+
+  - name: riot
+    ats: greenhouse
+    board_token: "riotgames"
+    enabled: true

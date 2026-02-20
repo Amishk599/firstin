@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -65,17 +66,19 @@ type WorkdayAdapter struct {
 	client      *http.Client
 	preFilter   model.JobFilter // optional: used to skip detail fetches for listings that clearly won't match
 	auditMode   bool            // when true: return all listings, only detail-fetch fresh ones
+	logger      *slog.Logger
 }
 
 // NewWorkdayAdapter creates a new adapter for a Workday career site.
 // An optional preFilter can be provided to skip detail API calls for listings that clearly won't match
 // pass nil to disable pre-filtering.
-func NewWorkdayAdapter(baseURL string, companyName string, client *http.Client, preFilter model.JobFilter) *WorkdayAdapter {
+func NewWorkdayAdapter(baseURL string, companyName string, client *http.Client, preFilter model.JobFilter, logger *slog.Logger) *WorkdayAdapter {
 	return &WorkdayAdapter{
 		baseURL:     strings.TrimRight(baseURL, "/"),
 		companyName: companyName,
 		client:      client,
 		preFilter:   preFilter,
+		logger:      logger,
 	}
 }
 
@@ -127,6 +130,7 @@ func (a *WorkdayAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) {
 func (a *WorkdayAdapter) fetchAllListings(ctx context.Context) ([]workdayListing, error) {
 	var all []workdayListing
 	offset := 0
+	pagesScanned := 0
 
 	for {
 		body := workdayListingRequest{
@@ -152,9 +156,9 @@ func (a *WorkdayAdapter) fetchAllListings(ctx context.Context) ([]workdayListing
 		if err != nil {
 			return nil, fmt.Errorf("workday listing fetch for %s: %w", a.companyName, err)
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
 			return nil, &model.HTTPError{
 				StatusCode: resp.StatusCode,
 				RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
@@ -164,18 +168,40 @@ func (a *WorkdayAdapter) fetchAllListings(ctx context.Context) ([]workdayListing
 
 		var listResp workdayListingResponse
 		if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+			resp.Body.Close()
 			return nil, fmt.Errorf("workday listing decode for %s: %w", a.companyName, err)
 		}
+		resp.Body.Close()
 
+		pagesScanned++
 		all = append(all, listResp.JobPostings...)
 
-		// Early exit: if the last listing on this page is stale, all subsequent
-		// pages will be even older (Workday returns jobs in reverse chronological
-		// order), so there's no point fetching more. Skipped in audit mode since
-		// we want all listings.
-		if !a.auditMode && len(listResp.JobPostings) > 0 {
-			last := listResp.JobPostings[len(listResp.JobPostings)-1]
-			if !isFreshPosting(last.PostedOn) {
+		a.logger.Debug("workday page fetched",
+			"company", a.companyName,
+			"page", pagesScanned,
+			"offset", offset,
+			"page_count", len(listResp.JobPostings),
+			"total_so_far", len(all),
+			"api_total", listResp.Total,
+		)
+
+		// Early exit: if no listing on this entire page is fresh, stop paginating.
+		// Skipped in audit mode since we want all listings.
+		if !a.auditMode {
+			hasAnyFresh := false
+			for _, l := range listResp.JobPostings {
+				if isFreshPosting(l.PostedOn) {
+					hasAnyFresh = true
+					break
+				}
+			}
+			if !hasAnyFresh {
+				a.logger.Debug("workday early exit: no fresh listings on page",
+					"company", a.companyName,
+					"page", pagesScanned,
+					"offset", offset,
+					"total_listings_scanned", len(all),
+				)
 				break
 			}
 		}
@@ -185,6 +211,12 @@ func (a *WorkdayAdapter) fetchAllListings(ctx context.Context) ([]workdayListing
 			break
 		}
 	}
+
+	a.logger.Info("workday listing scan complete",
+		"company", a.companyName,
+		"pages_scanned", pagesScanned,
+		"total_listings", len(all),
+	)
 
 	return all, nil
 }
