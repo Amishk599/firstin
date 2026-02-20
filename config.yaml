@@ -1,8 +1,8 @@
-polling_interval: 10m
+polling_interval: 2m
 
 rate_limit:
   # minimum gap between requests to the same ATS
-  min_delay: 600s # 10 mins
+  min_delay: 2m
 
 # Notification settings (options: log, slack)
 notification:
@@ -232,5 +232,57 @@ companies:
     board_token: "lumalabs-ai"
     enabled: true
 
-# TODO: add greenhouse: lyft, xai, affirm, playstation, vanta
-# TODO: add greenhouse: lyft, xai, affirm, playstation, vanta
+  - name: lyft
+    ats: greenhouse
+    board_token: "lyft"
+    enabled: true
+
+  - name: xai
+    ats: greenhouse
+    board_token: "xai"
+    enabled: true
+
+  - name: affirm
+    ats: greenhouse
+    board_token: "affirm"
+    enabled: true
+
+  - name: playstation
+    ats: greenhouse
+    board_token: "sonyinteractiveentertainmentglobal"
+    enabled: true
+
+  - name: vanta
+    ats: ashby
+    board_token: "vanta"
+    enabled: true
+
+  - name: zoox
+    ats: lever
+    board_token: "zoox"
+    enabled: true
+
+  - name: wealthfront
+    ats: lever
+    board_token: "wealthfront"
+    enabled: true
+
+  - name: aircall
+    ats: lever
+    board_token: "aircall"
+    enabled: true
+
+  - name: airbnb
+    ats: greenhouse
+    board_token: "airbnb"
+    enabled: true
+
+  - name: harvey
+    ats: ashby
+    board_token: "harvey"
+    enabled: true
+
+  - name: adobe
+    ats: workday
+    workday_url: "https://adobe.wd5.myworkdayjobs.com/wday/cxs/adobe/external_experienced"
+    enabled: true
