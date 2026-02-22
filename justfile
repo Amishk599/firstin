@@ -43,3 +43,7 @@ release version:
 # Build release snapshot locally without publishing (requires goreleaser)
 release-dry:
     goreleaser release --snapshot --clean
+
+# Publish release to GitHub via GoReleaser (run after release)
+publish:
+    goreleaser release --clean
