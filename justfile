@@ -34,3 +34,12 @@ lint:
 
 clean:
     rm -f firstin jobs.db
+
+# Tag and push to trigger a GitHub Release via GoReleaser
+release version:
+    git tag {{version}}
+    git push origin {{version}}
+
+# Build release snapshot locally without publishing (requires goreleaser)
+release-dry:
+    goreleaser release --snapshot --clean
