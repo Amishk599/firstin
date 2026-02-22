@@ -76,7 +76,17 @@ All components are wired through interfaces. `main()` is the only site that refe
 | Single binary | No runtime dependencies; runs on Linux, macOS, or Docker |
 
 ### FirstIn TUI
-![FirstIn TUI](assets/firstin-TUI-screenshot.png)
+<!-- <img src="assets/firstin-tui-ss-1.png" width="700" alt="FirstIn TUI Menu">
+  <img src="assets/firstin-tui-ss-2.png" width="700" alt="FirstIn TUI Jobs">
+  <img src="assets/firstin-slack-alert.png" width="300" height="650" alt="FirstIn Slack Alert"> -->
+
+<table>  
+    <tr>                            
+      <td><img src="assets/firstin-tui-ss-1.png" width="300" height=650 alt="FirstIn TUI Menu"></td>                                                                                            
+      <td><img src="assets/firstin-slack-alert.png" width="300" height="650" alt="FirstIn Slack Alert"></td>                                                                                            
+    </tr>                       
+  </table>
+<img src="assets/firstin-tui-ss-2.png" width="700" alt="FirstIn TUI Jobs">
 ---
 
 ## Getting Started
