@@ -19,6 +19,8 @@ type gemJob struct {
 	AbsoluteURL    string      `json:"absolute_url"`
 	FirstPublished string      `json:"first_published_at"`
 	UpdatedAt      string      `json:"updated_at"`
+	Content        string      `json:"content"`
+	ContentPlain   string      `json:"content_plain"`
 }
 
 type gemLocation struct {
@@ -90,6 +92,16 @@ func (a *GemAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) {
 			if t, err := time.Parse(time.RFC3339, gj.UpdatedAt); err == nil {
 				job.Detail = &model.JobDetail{UpdatedAt: &t}
 			}
+		}
+		desc := gj.ContentPlain
+		if desc == "" && gj.Content != "" {
+			desc = extractText(gj.Content)
+		}
+		if desc != "" {
+			if job.Detail == nil {
+				job.Detail = &model.JobDetail{}
+			}
+			job.Detail.Description = desc
 		}
 
 		jobs = append(jobs, job)

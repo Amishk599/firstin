@@ -37,7 +37,7 @@ func TestWorkdayFetchJobs_Success(t *testing.T) {
 			"externalUrl": "https://salesforce.wd12.myworkdayjobs.com/Slack/job/Software-Engineer/JR328732",
 			"country": {"descriptor": "United States of America"},
 			"additionalLocations": ["New York, NY"],
-			"jobReqId": "JR328732"
+			"jobDescription": "<p>Build scalable systems.</p>"
 		}
 	}`
 
@@ -82,6 +82,9 @@ func TestWorkdayFetchJobs_Success(t *testing.T) {
 	}
 	if j.PostedAt.Year() != 2026 || j.PostedAt.Month() != 2 || j.PostedAt.Day() != 17 {
 		t.Errorf("unexpected PostedAt: %v", j.PostedAt)
+	}
+	if j.Detail == nil || j.Detail.Description != "Build scalable systems." {
+		t.Errorf("expected description 'Build scalable systems.', got %v", j.Detail)
 	}
 }
 
