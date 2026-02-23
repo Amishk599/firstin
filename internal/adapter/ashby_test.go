@@ -16,14 +16,16 @@ func TestAshbyFetchJobs_Success(t *testing.T) {
 				"location": "San Francisco, CA",
 				"jobUrl": "https://jobs.ashbyhq.com/acme/abc-123",
 				"publishedAt": "2026-02-13T10:00:00Z",
-				"isListed": true
+				"isListed": true,
+				"descriptionPlain": "We are hiring senior engineers."
 			},
 			{
 				"title": "Backend Engineer",
 				"location": "Remote, US",
 				"jobUrl": "https://jobs.ashbyhq.com/acme/def-456",
 				"publishedAt": "2026-02-13T11:30:00Z",
-				"isListed": true
+				"isListed": true,
+				"descriptionHtml": "<p>Backend role.</p>"
 			},
 			{
 				"title": "Unlisted Role",
@@ -75,6 +77,15 @@ func TestAshbyFetchJobs_Success(t *testing.T) {
 	}
 	if j.PostedAt.Year() != 2026 || j.PostedAt.Month() != 2 || j.PostedAt.Day() != 13 {
 		t.Errorf("unexpected PostedAt: %v", j.PostedAt)
+	}
+	if j.Detail == nil || j.Detail.Description != "We are hiring senior engineers." {
+		t.Errorf("expected description from plain text, got %v", j.Detail)
+	}
+
+	// Second job has no descriptionPlain — should fall back to stripping descriptionHtml.
+	j2 := jobs[1]
+	if j2.Detail == nil || j2.Detail.Description != "Backend role." {
+		t.Errorf("expected description from HTML fallback, got %v", j2.Detail)
 	}
 }
 

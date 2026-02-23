@@ -109,6 +109,14 @@ func (a *LeverAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) {
 			},
 		}
 
+		desc := lj.DescriptionPlain
+		if desc == "" && lj.Description != "" {
+			desc = extractText(lj.Description)
+		}
+		if desc != "" {
+			job.Detail.Description = desc
+		}
+
 		jobs = append(jobs, job)
 	}
 

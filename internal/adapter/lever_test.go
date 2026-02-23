@@ -89,6 +89,13 @@ func TestLeverAdapter_FetchJobs_Success(t *testing.T) {
 		t.Errorf("expected PostedAt %v, got %v", expected, j.PostedAt)
 	}
 
+	if j.Detail == nil {
+		t.Fatal("expected Detail to be set for first job")
+	}
+	if j.Detail.Description != "Plain text job description" {
+		t.Errorf("expected Description 'Plain text job description', got %s", j.Detail.Description)
+	}
+
 	// Verify second job
 	j2 := jobs[1]
 	if j2.ID != "a1b2c3d4-e5f6-7890-abcd-ef1234567890" {
@@ -99,6 +106,12 @@ func TestLeverAdapter_FetchJobs_Success(t *testing.T) {
 	}
 	if j2.PostedAt == nil {
 		t.Fatal("expected PostedAt to be set for second job")
+	}
+	if j2.Detail == nil {
+		t.Fatal("expected Detail to be set for second job")
+	}
+	if j2.Detail.Description != "Backend job description" {
+		t.Errorf("expected Description 'Backend job description', got %s", j2.Detail.Description)
 	}
 }
 

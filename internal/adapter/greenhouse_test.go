@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/amishk599/firstin/internal/model"
 )
 
 func TestFetchJobs_Success(t *testing.T) {
@@ -159,25 +161,22 @@ func TestFetchDetail_Success(t *testing.T) {
 	defer srv.Close()
 
 	a := newTestAdapter(srv, "acme", "Acme Corp")
-	detail, err := a.fetchDetail(context.Background(), 44444)
+	stub := model.Job{ID: "44444", Company: "Acme Corp", Source: "greenhouse"}
+	job, err := a.FetchJobDetail(context.Background(), stub)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	if detail.ID != 44444 {
-		t.Errorf("expected ID 44444, got %d", detail.ID)
+	if job.Detail == nil {
+		t.Fatal("expected Detail to be populated")
 	}
-	if detail.Title != "Product Engineer" {
-		t.Errorf("expected title Product Engineer, got %s", detail.Title)
+	if job.Detail.RequisitionID != "50" {
+		t.Errorf("expected requisition ID 50, got %s", job.Detail.RequisitionID)
 	}
-	if detail.Location.Name != "San Francisco, CA" {
-		t.Errorf("expected location San Francisco, CA, got %s", detail.Location.Name)
+	if len(job.Detail.PayRanges) != 1 || job.Detail.PayRanges[0].MinCents != 5000000 {
+		t.Errorf("unexpected pay ranges: %+v", job.Detail.PayRanges)
 	}
-	if detail.RequisitionID != "50" {
-		t.Errorf("expected requisition ID 50, got %s", detail.RequisitionID)
-	}
-	if len(detail.PayInputRanges) != 1 || detail.PayInputRanges[0].MinCents != 5000000 {
-		t.Errorf("unexpected pay ranges: %+v", detail.PayInputRanges)
+	if job.Detail.Description != "This is the job description." {
+		t.Errorf("expected description 'This is the job description.', got %q", job.Detail.Description)
 	}
 }
 

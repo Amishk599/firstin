@@ -83,6 +83,16 @@ var (
 				Bold(true).
 				Foreground(lipgloss.Color("15")).
 				MarginBottom(1)
+
+	descDividerStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("240"))
+
+	descHintStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("245")).
+				Italic(true)
+
+	descBodyStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("252"))
 )
 
 // detailFetchedMsg is sent when an async detail fetch completes.
@@ -105,11 +115,12 @@ type auditModel struct {
 	ready         bool
 
 	// Detail view state
-	view           viewState
-	detailJob      model.Job
-	detailLoading  bool
-	detailViewport viewport.Model
-	detailFetcher  model.JobDetailFetcher
+	view            viewState
+	detailJob       model.Job
+	detailLoading   bool
+	detailViewport  viewport.Model
+	detailFetcher   model.JobDetailFetcher
+	showDescription bool
 
 	wantQuit bool
 }
@@ -204,6 +215,13 @@ func (m auditModel) updateDetailView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		openURL(url)
 		return m, nil
+	case "r":
+		if m.detailJob.Detail != nil && m.detailJob.Detail.Description != "" {
+			m.showDescription = !m.showDescription
+			m.detailViewport.SetContent(m.renderDetail())
+			m.detailViewport.SetYOffset(0)
+		}
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -250,6 +268,7 @@ func (m auditModel) openDetailView() (tea.Model, tea.Cmd) {
 	job := jobs[cursor]
 	m.view = viewDetail
 	m.detailJob = job
+	m.showDescription = false
 	m.detailViewport = viewport.New(m.width-4, m.height-4)
 	m.detailViewport.SetContent(m.renderDetail())
 
@@ -400,6 +419,9 @@ func (m auditModel) viewDetail() string {
 	content := border.Render(m.detailViewport.View())
 
 	statusText := " o open URL  esc/backspace back  ↑/↓ scroll  q quit"
+	if m.detailJob.Detail != nil && m.detailJob.Detail.Description != "" {
+		statusText = " o open URL  r desc  esc/backspace back  ↑/↓ scroll  q quit"
+	}
 	statusBar := statusBarStyle.Width(m.width).Render(statusText)
 
 	return title + "\n" + content + "\n" + statusBar
@@ -471,6 +493,20 @@ func (m auditModel) renderDetail() string {
 		addField("Apply URL", j.Detail.ApplyURL)
 	}
 
+	if j.Detail != nil && j.Detail.Description != "" {
+		b.WriteByte('\n')
+		if m.showDescription {
+			wrapWidth := max(m.width-8, 20)
+			label := "── Job Description "
+			fill := strings.Repeat("─", max(wrapWidth-len(label), 3))
+			b.WriteString(descDividerStyle.Render(label+fill) + "\n\n")
+			b.WriteString(descBodyStyle.Render(wordWrap(j.Detail.Description, wrapWidth)) + "\n")
+		} else {
+			hint := "  press r to read job description"
+			b.WriteString(descHintStyle.Render(hint) + "\n")
+		}
+	}
+
 	return b.String()
 }
 
@@ -534,6 +570,25 @@ func sortJobsByDate(jobs []model.Job) {
 		}
 		return jobs[i].PostedAt.After(*jobs[j].PostedAt)
 	})
+}
+
+func wordWrap(text string, width int) string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return ""
+	}
+	var lines []string
+	line := words[0]
+	for _, w := range words[1:] {
+		if len(line)+1+len(w) <= width {
+			line += " " + w
+		} else {
+			lines = append(lines, line)
+			line = w
+		}
+	}
+	lines = append(lines, line)
+	return strings.Join(lines, "\n")
 }
 
 func clamp(v, lo, hi int) int {

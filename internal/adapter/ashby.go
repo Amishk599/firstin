@@ -14,11 +14,13 @@ const ashbyBaseURL = "https://api.ashbyhq.com/posting-api/job-board"
 
 // ashbyJob represents a single job in the Ashby API response.
 type ashbyJob struct {
-	Title       string `json:"title"`
-	Location    string `json:"location"`
-	JobUrl      string `json:"jobUrl"`
-	PublishedAt string `json:"publishedAt"`
-	IsListed    bool   `json:"isListed"`
+	Title            string `json:"title"`
+	Location         string `json:"location"`
+	JobUrl           string `json:"jobUrl"`
+	PublishedAt      string `json:"publishedAt"`
+	IsListed         bool   `json:"isListed"`
+	DescriptionPlain string `json:"descriptionPlain"`
+	DescriptionHtml  string `json:"descriptionHtml"`
 }
 
 // ashbyResponse is the top-level Ashby job board API response.
@@ -92,6 +94,18 @@ func (a *AshbyAdapter) FetchJobs(ctx context.Context) ([]model.Job, error) {
 				job.PostedAt = &t
 				job.Detail = &model.JobDetail{PublishedAt: &t}
 			}
+		}
+
+		// Populate description — prefer plain text, fall back to stripping HTML.
+		desc := aj.DescriptionPlain
+		if desc == "" && aj.DescriptionHtml != "" {
+			desc = extractText(aj.DescriptionHtml)
+		}
+		if desc != "" {
+			if job.Detail == nil {
+				job.Detail = &model.JobDetail{}
+			}
+			job.Detail.Description = desc
 		}
 
 		jobs = append(jobs, job)
