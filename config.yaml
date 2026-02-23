@@ -301,3 +301,23 @@ companies:
     ats: greenhouse
     board_token: "riotgames"
     enabled: true
+
+  - name: matchgroup
+    ats: lever
+    board_token: "matchgroup"
+    enabled: true
+
+  - name: kikoff
+    ats: ashby
+    board_token: "kikoff"
+    enabled: true
+
+  - name: deepmind
+    ats: greenhouse
+    board_token: "deepmind"
+    enabled: true
+
+  - name: expedia
+    ats: workday
+    workday_url: "https://expedia.wd108.myworkdayjobs.com/wday/cxs/expedia/search"
+    enabled: true
