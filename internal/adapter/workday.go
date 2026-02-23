@@ -53,6 +53,7 @@ type workdayJobDetail struct {
 	ExternalURL         string         `json:"externalUrl"`
 	Country             workdayCountry `json:"country"`
 	AdditionalLocations []string       `json:"additionalLocations"`
+	JobDescription      string         `json:"jobDescription"`
 }
 
 type workdayCountry struct {
@@ -294,6 +295,10 @@ func (a *WorkdayAdapter) fetchDetail(ctx context.Context, listing workdayListing
 	}
 	if job.PostedAt == nil {
 		job.PostedAt = parsePostedOn(info.PostedOn)
+	}
+
+	if info.JobDescription != "" {
+		jobDetail.Description = extractText(info.JobDescription)
 	}
 
 	job.Detail = jobDetail

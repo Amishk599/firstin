@@ -67,8 +67,14 @@ type JobDetail struct {
 	// Mirrors Job.PostedAt for these ATS; kept here for display in the TUI detail view.
 	PublishedAt *time.Time
 
-	RequisitionID string     // greenhouse requisition_id
-	PayRanges     []PayRange // greenhouse pay_input_ranges (salary info)
+	RequisitionID string // greenhouse requisition_id
+
+	// Description is the plain-text job description, normalized from HTML or
+	// pre-rendered plain text depending on the ATS.
+	// Set by: Greenhouse (FetchJobDetail), Ashby (FetchJobs), Workday (fetchDetail).
+	Description string
+
+	PayRanges []PayRange // greenhouse pay_input_ranges (salary info)
 }
 
 // PayRange represents a salary/pay range from Greenhouse.

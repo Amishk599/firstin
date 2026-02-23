@@ -4,18 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html"
 	"net/http"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/amishk599/firstin/internal/model"
 )
 
 const greenhouseBaseURL = "https://boards-api.greenhouse.io/v1/boards"
-
-var htmlTagRegex = regexp.MustCompile(`<[^>]*>`)
 
 // greenhouseJob represents a single job in the Greenhouse API response.
 type greenhouseJob struct {
@@ -192,6 +187,9 @@ func (a *GreenhouseAdapter) FetchJobDetail(ctx context.Context, job model.Job) (
 		}
 	}
 	job.Detail.RequisitionID = detail.RequisitionID
+	if detail.Content != "" {
+		job.Detail.Description = extractText(detail.Content)
+	}
 
 	for _, pr := range detail.PayInputRanges {
 		job.Detail.PayRanges = append(job.Detail.PayRanges, model.PayRange{
@@ -203,14 +201,4 @@ func (a *GreenhouseAdapter) FetchJobDetail(ctx context.Context, job model.Job) (
 	}
 
 	return job, nil
-}
-
-// extractText converts the Greenhouse content field to plain text.
-// The content is HTML-encoded HTML (e.g. "&lt;p&gt;" in the JSON string), so
-// we first unescape entities to get real HTML, then strip all tags and
-// collapse leftover whitespace into a single clean string.
-func extractText(content string) string {
-	unescaped := html.UnescapeString(content)
-	plain := htmlTagRegex.ReplaceAllString(unescaped, "")
-	return strings.Join(strings.Fields(plain), " ")
 }

@@ -17,7 +17,9 @@ func TestGemFetchJobs_Success(t *testing.T) {
 			"location": {"name": "San Francisco, CA"},
 			"absolute_url": "https://jobs.gem.com/retool/jobs/abc-123",
 			"first_published_at": "2026-02-10T09:00:00Z",
-			"updated_at": "2026-02-13T10:00:00Z"
+			"updated_at": "2026-02-13T10:00:00Z",
+			"content": "&lt;p&gt;Build great products.&lt;/p&gt;",
+			"content_plain": "Build great products."
 		},
 		{
 			"id": "def-456",
@@ -69,6 +71,12 @@ func TestGemFetchJobs_Success(t *testing.T) {
 	}
 	if j.URL != "https://jobs.gem.com/retool/jobs/abc-123" {
 		t.Errorf("unexpected URL: %s", j.URL)
+	}
+	if j.Detail == nil {
+		t.Fatal("expected Detail to be set for first job")
+	}
+	if j.Detail.Description != "Build great products." {
+		t.Errorf("expected Description 'Build great products.', got %s", j.Detail.Description)
 	}
 }
 
