@@ -13,20 +13,30 @@ import (
 // its companies sequentially with minDelay between same-ATS requests, then
 // sleeps polling_interval before the next pass. Rate limiting is structural.
 type Scheduler struct {
-	pollers  []*poller.CompanyPoller
-	interval time.Duration
-	minDelay time.Duration
-	logger   *slog.Logger
+	pollers   []*poller.CompanyPoller
+	interval  time.Duration
+	minDelay  time.Duration
+	atsDelays map[string]time.Duration
+	logger    *slog.Logger
 }
 
 // NewScheduler creates a scheduler that groups pollers by ATS and runs one goroutine per group.
-func NewScheduler(pollers []*poller.CompanyPoller, interval time.Duration, minDelay time.Duration, logger *slog.Logger) *Scheduler {
+func NewScheduler(pollers []*poller.CompanyPoller, interval, minDelay time.Duration, atsDelays map[string]time.Duration, logger *slog.Logger) *Scheduler {
 	return &Scheduler{
-		pollers:  pollers,
-		interval: interval,
-		minDelay: minDelay,
-		logger:   logger,
+		pollers:   pollers,
+		interval:  interval,
+		minDelay:  minDelay,
+		atsDelays: atsDelays,
+		logger:    logger,
 	}
+}
+
+// minDelayFor returns the per-ATS delay if configured, otherwise the global minDelay.
+func (s *Scheduler) minDelayFor(ats string) time.Duration {
+	if d, ok := s.atsDelays[ats]; ok {
+		return d
+	}
+	return s.minDelay
 }
 
 // groupByATS returns pollers grouped by ATS name. Order within each group preserves config order.
@@ -46,6 +56,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	s.logger.Info("starting scheduler",
 		"interval", s.interval.String(),
 		"min_delay", s.minDelay.String(),
+		"ats_overrides", len(s.atsDelays),
 		"companies", len(s.pollers),
 		"ats_groups", len(groups),
 	)
@@ -85,7 +96,7 @@ func (s *Scheduler) runATSLoop(ctx context.Context, ats string, pollers []*polle
 				select {
 				case <-ctx.Done():
 					return
-				case <-time.After(s.minDelay):
+				case <-time.After(s.minDelayFor(ats)):
 				}
 			}
 		}

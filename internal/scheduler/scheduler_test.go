@@ -100,7 +100,7 @@ func TestGroupByATS(t *testing.T) {
 		makePoller("co2", "ashby", &CountingFetcher{}),
 		makePoller("co3", "greenhouse", &CountingFetcher{}),
 	}
-	s := NewScheduler(pollers, time.Hour, 0, discardLogger())
+	s := NewScheduler(pollers, time.Hour, 0, nil, discardLogger())
 	groups := s.groupByATS()
 
 	if len(groups) != 2 {
@@ -116,7 +116,7 @@ func TestGroupByATS(t *testing.T) {
 
 func TestRun_CancelReturnsPromptly(t *testing.T) {
 	p := makePoller("testco", "greenhouse", &CountingFetcher{})
-	s := NewScheduler([]*poller.CompanyPoller{p}, 1*time.Hour, time.Minute, discardLogger())
+	s := NewScheduler([]*poller.CompanyPoller{p}, 1*time.Hour, time.Minute, nil, discardLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -144,7 +144,7 @@ func TestRun_PollersCalledPerATSLoop(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s := NewScheduler(pollers, 100*time.Millisecond, 0, discardLogger())
+	s := NewScheduler(pollers, 100*time.Millisecond, 0, nil, discardLogger())
 
 	done := make(chan error, 1)
 	go func() {
@@ -171,7 +171,7 @@ func TestRun_OnePollerErrorOthersInDifferentATSStillRun(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s := NewScheduler(pollers, 1*time.Hour, 0, discardLogger())
+	s := NewScheduler(pollers, 1*time.Hour, 0, nil, discardLogger())
 
 	done := make(chan error, 1)
 	go func() {
@@ -199,7 +199,7 @@ func TestRun_MinDelayBetweenSameATSCompanies(t *testing.T) {
 
 	// Min delay 50ms between companies in same ATS; interval 1h so we only do one pass.
 	ctx, cancel := context.WithCancel(context.Background())
-	s := NewScheduler(pollers, 1*time.Hour, 50*time.Millisecond, discardLogger())
+	s := NewScheduler(pollers, 1*time.Hour, 50*time.Millisecond, nil, discardLogger())
 
 	start := time.Now()
 	done := make(chan error, 1)
@@ -233,7 +233,7 @@ func TestRun_OnePollerErrorSameATSGroupContinues(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s := NewScheduler(pollers, 1*time.Hour, 0, discardLogger())
+	s := NewScheduler(pollers, 1*time.Hour, 0, nil, discardLogger())
 
 	done := make(chan error, 1)
 	go func() {
@@ -264,7 +264,7 @@ func TestRun_AllATSGroupsRunIndependently(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s := NewScheduler(pollers, 1*time.Hour, 0, discardLogger())
+	s := NewScheduler(pollers, 1*time.Hour, 0, nil, discardLogger())
 
 	done := make(chan error, 1)
 	go func() {
@@ -291,7 +291,7 @@ func TestRun_OrderWithinGroupPreserved(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s := NewScheduler(pollers, 1*time.Hour, 0, discardLogger())
+	s := NewScheduler(pollers, 1*time.Hour, 0, nil, discardLogger())
 
 	done := make(chan error, 1)
 	go func() {

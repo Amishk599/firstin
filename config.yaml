@@ -8,8 +8,13 @@ ai:
   timeout: 30s                   # per-request LLM timeout
 
 rate_limit:
-  # minimum gap between requests to the same ATS
+  # minimum gap between requests to the same ATS (global default)
   min_delay: 2m
+  # per-ATS overrides(take precedence over min_delay for that ATS group)
+  ats_overrides:
+    greenhouse: 1m 
+    microsoft: 5m
+    gem: 10m
 
 # Notification settings (options: log, slack)
 notification:
@@ -332,3 +337,5 @@ companies:
   - name: microsoft
     ats: microsoft
     enabled: true
+
+    # TODO : greenshouse: twitch

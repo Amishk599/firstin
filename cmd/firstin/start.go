@@ -68,7 +68,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	sched := scheduler.NewScheduler(pollers, cfg.PollingInterval, cfg.RateLimit.MinDelay, logger)
+	sched := scheduler.NewScheduler(pollers, cfg.PollingInterval, cfg.RateLimit.MinDelay, cfg.RateLimit.ATSOverrides, logger)
 	if err := sched.Run(ctx); err != nil {
 		logger.Error("scheduler error", "error", err)
 		os.Exit(1)

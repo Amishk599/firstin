@@ -29,7 +29,16 @@ type AIConfig struct {
 
 // RateLimitConfig controls ATS-level rate limiting.
 type RateLimitConfig struct {
-	MinDelay time.Duration // minimum gap between requests to the same ATS
+	MinDelay     time.Duration            // minimum gap between requests to the same ATS
+	ATSOverrides map[string]time.Duration // per-ATS overrides, keyed by ATS name
+}
+
+// MinDelayFor returns the configured delay for the given ATS, falling back to MinDelay.
+func (r RateLimitConfig) MinDelayFor(ats string) time.Duration {
+	if d, ok := r.ATSOverrides[ats]; ok {
+		return d
+	}
+	return r.MinDelay
 }
 
 // NotificationConfig controls which notifier is used and its settings.
@@ -77,7 +86,8 @@ type rawAIConfig struct {
 }
 
 type rawRateLimitConfig struct {
-	MinDelay string `yaml:"min_delay"`
+	MinDelay     string            `yaml:"min_delay"`
+	ATSOverrides map[string]string `yaml:"ats_overrides"`
 }
 
 type rawFilterConfig struct {
@@ -124,6 +134,15 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	atsOverrides := make(map[string]time.Duration)
+	for ats, raw := range raw.RateLimit.ATSOverrides {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			return nil, fmt.Errorf("parse rate_limit.ats_overrides[%q]: %w", ats, err)
+		}
+		atsOverrides[ats] = d
+	}
+
 	aiTimeout := 30 * time.Second // default
 	if raw.AI.Timeout != "" {
 		aiTimeout, err = time.ParseDuration(raw.AI.Timeout)
@@ -149,7 +168,8 @@ func Load(path string) (*Config, error) {
 		},
 		Notification: raw.Notification,
 		RateLimit: RateLimitConfig{
-			MinDelay: rateLimitDelay,
+			MinDelay:     rateLimitDelay,
+			ATSOverrides: atsOverrides,
 		},
 		AI: AIConfig{
 			Enabled: raw.AI.Enabled,
