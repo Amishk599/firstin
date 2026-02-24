@@ -321,3 +321,7 @@ companies:
     ats: workday
     workday_url: "https://expedia.wd108.myworkdayjobs.com/wday/cxs/expedia/search"
     enabled: true
+
+  - name: microsoft
+    ats: microsoft
+    enabled: true
