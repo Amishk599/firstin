@@ -46,6 +46,15 @@ var (
 
 	pickerATSStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("238"))
+
+	pickerDisabledStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("238")).
+				Padding(0, 0, 0, 4)
+
+	pickerDisabledSelectedStyle = lipgloss.NewStyle().
+					Foreground(lipgloss.Color("238")).
+					Bold(true).
+					Padding(0, 0, 0, 2)
 )
 
 // fixedPickerLines is the number of lines consumed by the banner, subtitle,
@@ -121,11 +130,22 @@ func (m pickerModel) View() string {
 		num := fmt.Sprintf("%2d.", i+1)
 		ats := pickerATSStyle.Render(fmt.Sprintf("(%s)", c.ATS))
 		displayName := strings.ToUpper(c.Name[:1]) + c.Name[1:]
+		if !c.Enabled {
+			displayName += " [disabled]"
+		}
 		label := fmt.Sprintf("%s %s %s", num, displayName, ats)
 		if i == m.cursor {
-			list.WriteString(pickerSelectedStyle.Render("> "+label) + "\n")
+			if c.Enabled {
+				list.WriteString(pickerSelectedStyle.Render("> "+label) + "\n")
+			} else {
+				list.WriteString(pickerDisabledSelectedStyle.Render("> "+label) + "\n")
+			}
 		} else {
-			list.WriteString(pickerItemStyle.Render(label) + "\n")
+			if c.Enabled {
+				list.WriteString(pickerItemStyle.Render(label) + "\n")
+			} else {
+				list.WriteString(pickerDisabledStyle.Render(label) + "\n")
+			}
 		}
 	}
 

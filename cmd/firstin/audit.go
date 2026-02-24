@@ -47,19 +47,13 @@ func runAuditCmd(cmd *cobra.Command, args []string) error {
 }
 
 func runAudit(cfg *config.Config, httpClient *http.Client, analyzer poller.JobAnalyzer, logger *slog.Logger) {
-	var enabled []config.CompanyConfig
-	for _, c := range cfg.Companies {
-		if c.Enabled {
-			enabled = append(enabled, c)
-		}
-	}
-	if len(enabled) == 0 {
-		fmt.Println("No enabled companies in config.")
+	if len(cfg.Companies) == 0 {
+		fmt.Println("No companies in config.")
 		return
 	}
 
 	for {
-		choice, err := audit.RunCompanyPicker(enabled)
+		choice, err := audit.RunCompanyPicker(cfg.Companies)
 		if err != nil {
 			fmt.Printf("Picker error: %v\n", err)
 			return
@@ -67,7 +61,7 @@ func runAudit(cfg *config.Config, httpClient *http.Client, analyzer poller.JobAn
 		if choice < 0 {
 			return
 		}
-		company := enabled[choice]
+		company := cfg.Companies[choice]
 
 		fetcher, ok := createFetcher(company, httpClient, nil, logger)
 		if !ok {

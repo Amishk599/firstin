@@ -12,8 +12,8 @@ rate_limit:
   min_delay: 2m
   # per-ATS overrides(take precedence over min_delay for that ATS group)
   ats_overrides:
-    greenhouse: 1m 
-    microsoft: 5m
+    greenhouse: 2m 
+    microsoft: 10m
     gem: 10m
 
 # Notification settings (options: log, slack)
@@ -336,6 +336,6 @@ companies:
 
   - name: microsoft
     ats: microsoft
-    enabled: true
+    enabled: false
 
     # TODO : greenshouse: twitch
