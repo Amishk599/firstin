@@ -77,6 +77,8 @@ func createFetcher(company config.CompanyConfig, httpClient *http.Client, jobFil
 		return adapter.NewGemAdapter(company.BoardToken, company.Name, httpClient), true
 	case "workday":
 		return adapter.NewWorkdayAdapter(company.WorkdayURL, company.Name, httpClient, jobFilter, logger), true
+	case "microsoft":
+		return adapter.NewMicrosoftAdapter(company.Name, httpClient), true
 	default:
 		logger.Warn("unsupported ATS, skipping", "company", company.Name, "ats", company.ATS)
 		return nil, false

@@ -118,6 +118,7 @@ type auditModel struct {
 	view            viewState
 	detailJob       model.Job
 	detailLoading   bool
+	detailError     string
 	detailViewport  viewport.Model
 	detailFetcher   model.JobDetailFetcher
 	showDescription bool
@@ -145,9 +146,11 @@ func (m auditModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case detailFetchedMsg:
 		m.detailLoading = false
 		if msg.err != nil {
-			// Stay on detail view, show what we have
+			m.detailError = fmt.Sprintf("failed to load description: %v", msg.err)
+			m.detailViewport.SetContent(m.renderDetail())
 			return m, nil
 		}
+		m.detailError = ""
 		m.detailJob = msg.job
 		// Update the job in the list so re-entering doesn't re-fetch
 		m.updateJobInLists(msg.job)
@@ -268,6 +271,7 @@ func (m auditModel) openDetailView() (tea.Model, tea.Cmd) {
 	job := jobs[cursor]
 	m.view = viewDetail
 	m.detailJob = job
+	m.detailError = ""
 	m.showDescription = false
 	m.detailViewport = viewport.New(m.width-4, m.height-4)
 	m.detailViewport.SetContent(m.renderDetail())
@@ -309,7 +313,7 @@ func hasEnrichedDetail(job model.Job) bool {
 		return false
 	}
 	d := job.Detail
-	return d.RequisitionID != "" || len(d.PayRanges) > 0 || d.ApplyURL != ""
+	return d.RequisitionID != "" || len(d.PayRanges) > 0 || d.ApplyURL != "" || d.Description != ""
 }
 
 func (m *auditModel) recalcLayout() {
@@ -491,6 +495,11 @@ func (m auditModel) renderDetail() string {
 	addField("Job URL", j.URL)
 	if j.Detail != nil && j.Detail.ApplyURL != "" && j.Detail.ApplyURL != j.URL {
 		addField("Apply URL", j.Detail.ApplyURL)
+	}
+
+	if m.detailError != "" {
+		b.WriteByte('\n')
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("⚠ "+m.detailError) + "\n")
 	}
 
 	if j.Detail != nil && j.Detail.Description != "" {

@@ -68,10 +68,13 @@ func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) 
 			fmt.Printf("Unsupported ATS: %s\n", company.ATS)
 			continue
 		}
-		// In audit mode, Workday adapter should return all listings (not just fresh ones)
-		// but only detail-fetch the fresh ones to save API calls.
+		// In audit mode, adapters that support it should return all listings
+		// (not just fresh ones) so the full job board is visible.
 		if wa, ok := fetcher.(*adapter.WorkdayAdapter); ok {
 			wa.SetAuditMode(true)
+		}
+		if ma, ok := fetcher.(*adapter.MicrosoftAdapter); ok {
+			ma.SetAuditMode(true)
 		}
 
 		jobs, err := audit.RunLoader(company.Name, fetcher.FetchJobs)
