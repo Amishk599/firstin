@@ -26,8 +26,18 @@ type Job struct {
 	// Not yet wired — currently remains zero value.
 	FirstSeen time.Time
 
-	Source string     // ATS name: "greenhouse", "lever", "ashby", "workday"
-	Detail *JobDetail // optional enriched metadata; nil until populated
+	Source   string      // ATS name: "greenhouse", "lever", "ashby", "workday"
+	Detail   *JobDetail  // optional enriched metadata; nil until populated
+	Insights *JobInsights // nil when AI disabled or description unavailable
+}
+
+// JobInsights holds LLM-extracted structured information about a job posting.
+// Populated by LLMJobAnalyzer when ai.enabled is true; nil otherwise.
+type JobInsights struct {
+	RoleType  string   // e.g. "backend", "infra", "SRE", "platform", "AI/ML"
+	YearsExp  string   // e.g. "3-5 years" | "5+ years" | "not specified"
+	TechStack []string // up to 8 technologies, e.g. ["Go", "Kubernetes", "PostgreSQL"]
+	KeyPoints [3]string // exactly 3 concise bullet points (max 15 words each)
 }
 
 // JobDetail holds ATS-specific metadata. Fields are populated during FetchJobs

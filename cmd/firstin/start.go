@@ -57,8 +57,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 		cfg.Filters.ExcludeLocations,
 	)
 	n := setupNotifier(cfg, httpClient, logger)
+	analyzer := setupAnalyzer(cfg, logger)
 
-	pollers := buildPollers(cfg, jobFilter, sqlStore, n, httpClient, logger)
+	pollers := buildPollers(cfg, jobFilter, sqlStore, n, analyzer, httpClient, logger)
 	if len(pollers) == 0 {
 		logger.Error("no companies to poll")
 		os.Exit(1)

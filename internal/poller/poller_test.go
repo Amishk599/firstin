@@ -62,6 +62,13 @@ type AcceptAllFilter struct{}
 
 func (f *AcceptAllFilter) Match(_ model.Job) bool { return true }
 
+// NopAnalyzer is a no-op JobAnalyzer for tests.
+type NopAnalyzer struct{}
+
+func (n *NopAnalyzer) Analyze(_ context.Context, job model.Job) (model.Job, error) {
+	return job, nil
+}
+
 // RejectAllFilter rejects every job.
 type RejectAllFilter struct{}
 
@@ -114,6 +121,7 @@ func TestPoll_FilterAndDedup(t *testing.T) {
 		&AcceptAllFilter{},
 		store,
 		notifier,
+		&NopAnalyzer{},
 		time.Hour,
 		discardLogger(),
 	)
@@ -143,6 +151,7 @@ func TestPoll_FetchError(t *testing.T) {
 		&AcceptAllFilter{},
 		NewInMemoryStore(),
 		notifier,
+		&NopAnalyzer{},
 		time.Hour,
 		discardLogger(),
 	)
@@ -170,6 +179,7 @@ func TestPoll_AllAlreadySeen(t *testing.T) {
 		&AcceptAllFilter{},
 		store,
 		notifier,
+		&NopAnalyzer{},
 		time.Hour,
 		discardLogger(),
 	)
@@ -192,6 +202,7 @@ func TestPoll_FilterRejectsAll(t *testing.T) {
 		&RejectAllFilter{},
 		nonEmptyStore(),
 		notifier,
+		&NopAnalyzer{},
 		time.Hour,
 		discardLogger(),
 	)
@@ -222,6 +233,7 @@ func TestPoll_FreshnessSkipsOldJobs(t *testing.T) {
 		&AcceptAllFilter{},
 		nonEmptyStore(),
 		notifier,
+		&NopAnalyzer{},
 		time.Hour,
 		discardLogger(),
 	)
@@ -251,6 +263,7 @@ func TestPoll_NilPostedAtPassesThrough(t *testing.T) {
 		&AcceptAllFilter{},
 		nonEmptyStore(),
 		notifier,
+		&NopAnalyzer{},
 		time.Hour,
 		discardLogger(),
 	)
@@ -278,6 +291,7 @@ func TestPoll_FirstRunSeedsWithoutNotifying(t *testing.T) {
 		&AcceptAllFilter{},
 		store,
 		notifier,
+		&NopAnalyzer{},
 		time.Hour,
 		discardLogger(),
 	)

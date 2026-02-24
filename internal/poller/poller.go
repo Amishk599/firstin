@@ -10,7 +10,7 @@ import (
 )
 
 // CompanyPoller owns the full poll pipeline for a single company:
-// fetch → filter → dedup → notify → mark seen.
+// fetch → filter → dedup → [AI analyze] → notify → mark seen.
 type CompanyPoller struct {
 	Name     string
 	ATS      string
@@ -18,6 +18,7 @@ type CompanyPoller struct {
 	filter   model.JobFilter
 	store    model.JobStore
 	notifier model.Notifier
+	analyzer JobAnalyzer
 	maxAge   time.Duration
 	logger   *slog.Logger
 }
@@ -30,6 +31,7 @@ func NewCompanyPoller(
 	filter model.JobFilter,
 	store model.JobStore,
 	notifier model.Notifier,
+	analyzer JobAnalyzer,
 	maxAge time.Duration,
 	logger *slog.Logger,
 ) *CompanyPoller {
@@ -40,6 +42,7 @@ func NewCompanyPoller(
 		filter:   filter,
 		store:    store,
 		notifier: notifier,
+		analyzer: analyzer,
 		maxAge:   maxAge,
 		logger:   logger,
 	}
@@ -116,7 +119,17 @@ func (p *CompanyPoller) Poll(ctx context.Context) error {
 	}
 
 	if len(newJobs) > 0 {
-		if err := p.notifier.Notify(newJobs); err != nil {
+		enriched := make([]model.Job, 0, len(newJobs))
+		for _, job := range newJobs {
+			analysed, err := p.analyzer.Analyze(ctx, job)
+			if err != nil {
+				p.logger.Warn("ai analysis failed", "company", p.Name, "job_id", job.ID, "error", err)
+				enriched = append(enriched, job)
+			} else {
+				enriched = append(enriched, analysed)
+			}
+		}
+		if err := p.notifier.Notify(enriched); err != nil {
 			return fmt.Errorf("polling %s: notifying: %w", p.Name, err)
 		}
 	}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/amishk599/firstin/internal/config"
 	"github.com/amishk599/firstin/internal/model"
+	"github.com/amishk599/firstin/internal/poller"
 )
 
 var pst = time.FixedZone("PST", -8*60*60)
@@ -101,6 +102,12 @@ type detailFetchedMsg struct {
 	err error
 }
 
+// jobAnalyzedMsg is sent when an async AI analysis completes.
+type jobAnalyzedMsg struct {
+	job model.Job
+	err error
+}
+
 type auditModel struct {
 	allJobs       []model.Job
 	matchedJobs   []model.Job
@@ -122,6 +129,11 @@ type auditModel struct {
 	detailViewport  viewport.Model
 	detailFetcher   model.JobDetailFetcher
 	showDescription bool
+
+	// AI analysis state
+	analyzer      poller.JobAnalyzer
+	analyzeLoading bool
+	analyzeError   string
 
 	wantQuit bool
 }
@@ -154,6 +166,20 @@ func (m auditModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailJob = msg.job
 		// Update the job in the list so re-entering doesn't re-fetch
 		m.updateJobInLists(msg.job)
+		m.detailViewport.SetContent(m.renderDetail())
+		return m, nil
+
+	case jobAnalyzedMsg:
+		m.analyzeLoading = false
+		if msg.err != nil {
+			m.analyzeError = fmt.Sprintf("analysis failed: %v", msg.err)
+		} else if msg.job.Insights == nil {
+			m.analyzeError = "AI enrichment is not enabled — set ai.enabled: true in config.yaml"
+		} else {
+			m.analyzeError = ""
+			m.detailJob = msg.job
+			m.updateJobInLists(msg.job)
+		}
 		m.detailViewport.SetContent(m.renderDetail())
 		return m, nil
 
@@ -225,11 +251,28 @@ func (m auditModel) updateDetailView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.detailViewport.SetYOffset(0)
 		}
 		return m, nil
+	case "s":
+		if m.analyzer != nil && !m.analyzeLoading && m.detailJob.Insights == nil &&
+			m.detailJob.Detail != nil && m.detailJob.Detail.Description != "" {
+			m.analyzeLoading = true
+			m.analyzeError = ""
+			m.detailViewport.SetContent(m.renderDetail())
+			return m, m.analyzeJobCmd(m.detailJob)
+		}
+		return m, nil
 	}
 
 	var cmd tea.Cmd
 	m.detailViewport, cmd = m.detailViewport.Update(msg)
 	return m, cmd
+}
+
+func (m auditModel) analyzeJobCmd(job model.Job) tea.Cmd {
+	analyzer := m.analyzer
+	return func() tea.Msg {
+		analyzed, err := analyzer.Analyze(context.Background(), job)
+		return jobAnalyzedMsg{job: analyzed, err: err}
+	}
 }
 
 func (m *auditModel) moveCursor(delta int) {
@@ -424,7 +467,11 @@ func (m auditModel) viewDetail() string {
 
 	statusText := " o open URL  esc/backspace back  ↑/↓ scroll  q quit"
 	if m.detailJob.Detail != nil && m.detailJob.Detail.Description != "" {
-		statusText = " o open URL  r desc  esc/backspace back  ↑/↓ scroll  q quit"
+		if m.analyzer != nil && m.detailJob.Insights == nil && !m.analyzeLoading {
+			statusText = " o open URL  r desc  s summary  esc/backspace back  ↑/↓ scroll  q quit"
+		} else {
+			statusText = " o open URL  r desc  esc/backspace back  ↑/↓ scroll  q quit"
+		}
 	}
 	statusBar := statusBarStyle.Width(m.width).Render(statusText)
 
@@ -502,13 +549,39 @@ func (m auditModel) renderDetail() string {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("⚠ "+m.detailError) + "\n")
 	}
 
+	// AI insights block
+	wrapWidth := max(m.width-8, 20)
+	divider := func(label string) string {
+		fill := strings.Repeat("─", max(wrapWidth-len(label), 3))
+		return descDividerStyle.Render(label+fill)
+	}
+	if j.Insights != nil {
+		ins := j.Insights
+		b.WriteByte('\n')
+		b.WriteString(divider("── AI Summary ") + "\n\n")
+		addField("Role", ins.RoleType)
+		addField("Experience", ins.YearsExp)
+		if len(ins.TechStack) > 0 {
+			addField("Stack", strings.Join(ins.TechStack, ", "))
+		}
+		b.WriteByte('\n')
+		for _, pt := range ins.KeyPoints {
+			if pt != "" {
+				b.WriteString(detailValueStyle.Render("  • "+pt) + "\n")
+			}
+		}
+	} else if m.analyzeLoading {
+		b.WriteByte('\n')
+		b.WriteString(descHintStyle.Render("  analyzing job description...") + "\n")
+	} else if m.analyzeError == "" && j.Detail != nil && j.Detail.Description != "" {
+		b.WriteByte('\n')
+		b.WriteString(descHintStyle.Render("  press s for job description summary") + "\n")
+	}
+
 	if j.Detail != nil && j.Detail.Description != "" {
 		b.WriteByte('\n')
 		if m.showDescription {
-			wrapWidth := max(m.width-8, 20)
-			label := "── Job Description "
-			fill := strings.Repeat("─", max(wrapWidth-len(label), 3))
-			b.WriteString(descDividerStyle.Render(label+fill) + "\n\n")
+			b.WriteString(divider("── Job Description ") + "\n\n")
 			b.WriteString(descBodyStyle.Render(wordWrap(j.Detail.Description, wrapWidth)) + "\n")
 		} else {
 			hint := "  press r to read job description"
@@ -628,8 +701,9 @@ func openURL(url string) {
 
 // RunAuditTUI launches the interactive split-pane audit TUI.
 // detailFetcher may be nil for adapters that don't support on-demand detail fetching.
+// analyzer may be nil; when non-nil the 's' key triggers AI analysis in the detail view.
 // Returns wantQuit=true if the user pressed q/ctrl+c, false if they pressed esc to return to the picker.
-func RunAuditTUI(allJobs, matchedJobs []model.Job, filterCfg config.FilterConfig, detailFetcher model.JobDetailFetcher) (bool, error) {
+func RunAuditTUI(allJobs, matchedJobs []model.Job, filterCfg config.FilterConfig, detailFetcher model.JobDetailFetcher, analyzer poller.JobAnalyzer) (bool, error) {
 	sortJobsByDate(allJobs)
 	sortJobsByDate(matchedJobs)
 
@@ -638,6 +712,7 @@ func RunAuditTUI(allJobs, matchedJobs []model.Job, filterCfg config.FilterConfig
 		matchedJobs:   matchedJobs,
 		filterCfg:     filterCfg,
 		detailFetcher: detailFetcher,
+		analyzer:      analyzer,
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
