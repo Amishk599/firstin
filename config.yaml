@@ -1,5 +1,12 @@
 polling_interval: 2m
 
+ai:
+  enabled: true                  # enable or disable AI enrichment
+  base_url: ""                   # leave empty to use https://api.openai.com/v1
+  model: "gpt-4o-mini"           # OpenAI model
+  api_key: "${OPENAI_API_KEY}"   # env var expanded at startup
+  timeout: 30s                   # per-request LLM timeout
+
 rate_limit:
   # minimum gap between requests to the same ATS
   min_delay: 2m

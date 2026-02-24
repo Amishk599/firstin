@@ -164,40 +164,57 @@ func buildPayload(j model.Job) slackPayload {
 	company := capitalize(j.Company)
 	source := capitalize(j.Source)
 
-	return slackPayload{
-		Blocks: []slackBlock{
-			{
-				Type: "header",
-				Text: &slackText{Type: "plain_text", Text: "🚀 " + company + ": " + j.Title},
+	blocks := []slackBlock{
+		{
+			Type: "header",
+			Text: &slackText{Type: "plain_text", Text: "🚀 " + company + ": " + j.Title},
+		},
+		{
+			Type: "section",
+			Fields: []slackText{
+				{Type: "mrkdwn", Text: "*Company:*\n" + company},
+				{Type: "mrkdwn", Text: "*Location:*\n" + j.Location},
 			},
-			{
-				Type: "section",
-				Fields: []slackText{
-					{Type: "mrkdwn", Text: "*Company:*\n" + company},
-					{Type: "mrkdwn", Text: "*Location:*\n" + j.Location},
-				},
-			},
-			{
-				Type: "section",
-				Fields: []slackText{
-					{Type: "mrkdwn", Text: "*Posted:*\n" + postedText},
-					{Type: "mrkdwn", Text: "*Source:*\n" + source},
-				},
-			},
-			{
-				Type: "actions",
-				Elements: []slackElement{
-					{
-						Type:  "button",
-						Text:  slackText{Type: "plain_text", Text: "Apply Now"},
-						URL:   j.URL,
-						Style: "primary",
-					},
-				},
-			},
-			{
-				Type: "divider",
+		},
+		{
+			Type: "section",
+			Fields: []slackText{
+				{Type: "mrkdwn", Text: "*Posted:*\n" + postedText},
+				{Type: "mrkdwn", Text: "*Source:*\n" + source},
 			},
 		},
 	}
+
+	if j.Insights != nil {
+		stack := strings.Join(j.Insights.TechStack, ", ")
+		insightsText := fmt.Sprintf("*Role:* %s   *Exp:* %s   *Stack:* %s\n• %s\n• %s\n• %s",
+			j.Insights.RoleType,
+			j.Insights.YearsExp,
+			stack,
+			j.Insights.KeyPoints[0],
+			j.Insights.KeyPoints[1],
+			j.Insights.KeyPoints[2],
+		)
+		blocks = append(blocks, slackBlock{
+			Type: "section",
+			Text: &slackText{Type: "mrkdwn", Text: insightsText},
+		})
+	}
+
+	blocks = append(blocks,
+		slackBlock{
+			Type: "actions",
+			Elements: []slackElement{
+				{
+					Type:  "button",
+					Text:  slackText{Type: "plain_text", Text: "Apply Now"},
+					URL:   j.URL,
+					Style: "primary",
+				},
+			},
+		},
+		slackBlock{Type: "divider"},
+	)
+
+	return slackPayload{Blocks: blocks}
 }

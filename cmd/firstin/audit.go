@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/amishk599/firstin/internal/config"
 	"github.com/amishk599/firstin/internal/filter"
 	"github.com/amishk599/firstin/internal/model"
+	"github.com/amishk599/firstin/internal/poller"
 	"github.com/spf13/cobra"
 )
 
@@ -36,11 +38,15 @@ func runAuditCmd(cmd *cobra.Command, args []string) error {
 	}
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
-	runAudit(cfg, httpClient, logger)
+	// Use a discard logger for setupAnalyzer — audit mode runs a TUI and any
+	// log output before the alt-screen starts corrupts the display.
+	silentLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	analyzer := setupAnalyzer(cfg, silentLogger)
+	runAudit(cfg, httpClient, analyzer, logger)
 	return nil
 }
 
-func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) {
+func runAudit(cfg *config.Config, httpClient *http.Client, analyzer poller.JobAnalyzer, logger *slog.Logger) {
 	var enabled []config.CompanyConfig
 	for _, c := range cfg.Companies {
 		if c.Enabled {
@@ -101,7 +107,7 @@ func runAudit(cfg *config.Config, httpClient *http.Client, logger *slog.Logger) 
 			detailFetcher = df
 		}
 
-		wantQuit, err := audit.RunAuditTUI(jobs, matched, cfg.Filters, detailFetcher)
+		wantQuit, err := audit.RunAuditTUI(jobs, matched, cfg.Filters, detailFetcher, analyzer)
 		if err != nil {
 			fmt.Printf("TUI error: %v\n", err)
 		}

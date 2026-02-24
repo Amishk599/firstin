@@ -15,6 +15,16 @@ type Config struct {
 	Filters        FilterConfig
 	Notification   NotificationConfig
 	RateLimit      RateLimitConfig
+	AI             AIConfig
+}
+
+// AIConfig controls the optional OpenAI enrichment layer.
+type AIConfig struct {
+	Enabled bool
+	BaseURL string        // defaults to https://api.openai.com/v1
+	Model   string        // OpenAI model identifier, e.g. "gpt-4o-mini"
+	APIKey  string        // expanded from env var by Load
+	Timeout time.Duration // per-request timeout
 }
 
 // RateLimitConfig controls ATS-level rate limiting.
@@ -46,6 +56,8 @@ type FilterConfig struct {
 	MaxAge               time.Duration // max age of a job posting to be considered fresh
 }
 
+const defaultOpenAIBaseURL = "https://api.openai.com/v1"
+
 // rawConfig is used for YAML unmarshaling (snake_case fields and duration as string).
 type rawConfig struct {
 	PollingInterval string             `yaml:"polling_interval"`
@@ -53,6 +65,15 @@ type rawConfig struct {
 	Filters         rawFilterConfig    `yaml:"filters"`
 	Notification    NotificationConfig `yaml:"notification"`
 	RateLimit       rawRateLimitConfig `yaml:"rate_limit"`
+	AI              rawAIConfig        `yaml:"ai"`
+}
+
+type rawAIConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	BaseURL string `yaml:"base_url"`
+	Model   string `yaml:"model"`
+	APIKey  string `yaml:"api_key"`
+	Timeout string `yaml:"timeout"`
 }
 
 type rawRateLimitConfig struct {
@@ -103,6 +124,19 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	aiTimeout := 30 * time.Second // default
+	if raw.AI.Timeout != "" {
+		aiTimeout, err = time.ParseDuration(raw.AI.Timeout)
+		if err != nil {
+			return nil, fmt.Errorf("parse ai.timeout %q: %w", raw.AI.Timeout, err)
+		}
+	}
+
+	aiBaseURL := raw.AI.BaseURL
+	if aiBaseURL == "" {
+		aiBaseURL = defaultOpenAIBaseURL
+	}
+
 	cfg := &Config{
 		PollingInterval: interval,
 		Companies: raw.Companies,
@@ -116,6 +150,13 @@ func Load(path string) (*Config, error) {
 		Notification: raw.Notification,
 		RateLimit: RateLimitConfig{
 			MinDelay: rateLimitDelay,
+		},
+		AI: AIConfig{
+			Enabled: raw.AI.Enabled,
+			BaseURL: aiBaseURL,
+			Model:   raw.AI.Model,
+			APIKey:  raw.AI.APIKey,
+			Timeout: aiTimeout,
 		},
 	}
 
@@ -151,6 +192,18 @@ func validate(cfg *Config) error {
 		if len(cfg.Notification.WebhookURL) < len("https://hooks.slack.com/") ||
 			cfg.Notification.WebhookURL[:len("https://hooks.slack.com/")] != "https://hooks.slack.com/" {
 			return fmt.Errorf("notification.webhook_url must start with https://hooks.slack.com/")
+		}
+	}
+
+	if cfg.AI.Enabled {
+		if cfg.AI.APIKey == "" {
+			return fmt.Errorf("ai.api_key is required when ai.enabled is true")
+		}
+		if cfg.AI.BaseURL == "" {
+			return fmt.Errorf("ai.base_url (or a known ai.provider) is required when ai.enabled is true")
+		}
+		if cfg.AI.Model == "" {
+			return fmt.Errorf("ai.model is required when ai.enabled is true")
 		}
 	}
 

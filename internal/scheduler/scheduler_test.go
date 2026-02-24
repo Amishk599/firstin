@@ -68,6 +68,12 @@ type AcceptAllFilter struct{}
 
 func (f *AcceptAllFilter) Match(_ model.Job) bool { return true }
 
+type NopAnalyzer struct{}
+
+func (n *NopAnalyzer) Analyze(_ context.Context, job model.Job) (model.Job, error) {
+	return job, nil
+}
+
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
@@ -80,6 +86,7 @@ func makePoller(name, ats string, fetcher model.JobFetcher) *poller.CompanyPolle
 		&AcceptAllFilter{},
 		&NoOpStore{},
 		&NoOpNotifier{},
+		&NopAnalyzer{},
 		time.Hour,
 		discardLogger(),
 	)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/amishk599/firstin/internal/adapter"
+	"github.com/amishk599/firstin/internal/ai"
 	"github.com/amishk599/firstin/internal/config"
 	"github.com/amishk599/firstin/internal/model"
 	"github.com/amishk599/firstin/internal/notifier"
@@ -85,7 +86,18 @@ func createFetcher(company config.CompanyConfig, httpClient *http.Client, jobFil
 	}
 }
 
-func buildPollers(cfg *config.Config, jobFilter model.JobFilter, jobStore model.JobStore, n model.Notifier, httpClient *http.Client, logger *slog.Logger) []*poller.CompanyPoller {
+func setupAnalyzer(cfg *config.Config, logger *slog.Logger) poller.JobAnalyzer {
+	if !cfg.AI.Enabled {
+		logger.Info("ai enrichment disabled")
+		return ai.NewNopJobAnalyzer()
+	}
+	client := &http.Client{Timeout: cfg.AI.Timeout}
+	provider := ai.NewOpenAIProvider(cfg.AI.BaseURL, cfg.AI.APIKey, cfg.AI.Model, client)
+	logger.Info("ai enrichment enabled", "model", cfg.AI.Model, "base_url", cfg.AI.BaseURL)
+	return ai.NewLLMJobAnalyzer(provider, ai.JobAnalysisTemplate, logger)
+}
+
+func buildPollers(cfg *config.Config, jobFilter model.JobFilter, jobStore model.JobStore, n model.Notifier, analyzer poller.JobAnalyzer, httpClient *http.Client, logger *slog.Logger) []*poller.CompanyPoller {
 	logger.Info("scheduler min_delay", "min_delay", cfg.RateLimit.MinDelay.String())
 
 	var pollers []*poller.CompanyPoller
@@ -100,7 +112,7 @@ func buildPollers(cfg *config.Config, jobFilter model.JobFilter, jobStore model.
 		}
 
 		fetcher = retry.NewRetryFetcher(fetcher, 2, 5*time.Second, logger)
-		p := poller.NewCompanyPoller(company.Name, company.ATS, fetcher, jobFilter, jobStore, n, cfg.Filters.MaxAge, logger)
+		p := poller.NewCompanyPoller(company.Name, company.ATS, fetcher, jobFilter, jobStore, n, analyzer, cfg.Filters.MaxAge, logger)
 		pollers = append(pollers, p)
 		logger.Info("registered company", "name", company.Name, "ats", company.ATS)
 	}
