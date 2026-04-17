@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/amishk599/firstin/internal/adapter"
@@ -36,11 +37,15 @@ func init() {
 }
 
 // loadConfig resolves the config path and parses it.
-// Priority: explicit path arg > FIRSTIN_CONFIG env var > "./config.yaml"
+// Priority: explicit path arg > FIRSTIN_CONFIG env var > ./config.yaml > ~/.config/firstin/config.yaml
 func loadConfig(path string) (*config.Config, error) {
 	if path == "" {
 		if env := os.Getenv("FIRSTIN_CONFIG"); env != "" {
 			path = env
+		} else if _, err := os.Stat("config.yaml"); err == nil {
+			path = "config.yaml"
+		} else if home, err := os.UserHomeDir(); err == nil {
+			path = filepath.Join(home, ".config", "firstin", "config.yaml")
 		} else {
 			path = "config.yaml"
 		}

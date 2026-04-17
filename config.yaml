@@ -338,4 +338,17 @@ companies:
     ats: microsoft
     enabled: false
 
-    # TODO : greenshouse: twitch
+  - name: archer
+    ats: greenhouse
+    board_token: "archer56"
+    enabled: true
+
+  - name: cohesity
+    ats: workday
+    workday_url: "https://cohesity.wd5.myworkdayjobs.com/wday/cxs/cohesity/Cohesity_Careers"
+    enabled: true
+
+  - name: twitch
+    ats: greenhouse 
+    board_token: "twitch"
+    enabled: true
