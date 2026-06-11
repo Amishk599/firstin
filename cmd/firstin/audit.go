@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"github.com/amishk599/firstin/internal/filter"
 	"github.com/amishk599/firstin/internal/model"
 	"github.com/amishk599/firstin/internal/poller"
+	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
 
@@ -24,8 +26,16 @@ var auditCmd = &cobra.Command{
 	RunE:  runAuditCmd,
 }
 
+var auditNewCmd = &cobra.Command{
+	Use:   "new",
+	Short: "Audit a new (unconfigured) company",
+	Long:  "Interactively enter company details, then launch the full split-pane audit view.",
+	RunE:  runAuditNewCmd,
+}
+
 func init() {
 	rootCmd.AddCommand(auditCmd)
+	auditCmd.AddCommand(auditNewCmd)
 }
 
 func runAuditCmd(cmd *cobra.Command, args []string) error {
@@ -44,6 +54,62 @@ func runAuditCmd(cmd *cobra.Command, args []string) error {
 	analyzer := setupAnalyzer(cfg, silentLogger)
 	runAudit(cfg, httpClient, analyzer, logger)
 	return nil
+}
+
+func runAuditNewCmd(cmd *cobra.Command, args []string) error {
+	company, err := audit.RunNewCompanyForm()
+	if err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return nil
+		}
+		return err
+	}
+
+	cfg, err := loadConfig(cfgPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	silentLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	analyzer := setupAnalyzer(cfg, silentLogger)
+
+	fetcher, ok := createFetcher(company, httpClient, nil, silentLogger)
+	if !ok {
+		return fmt.Errorf("unsupported ATS: %s", company.ATS)
+	}
+	if wa, ok := fetcher.(*adapter.WorkdayAdapter); ok {
+		wa.SetAuditMode(true)
+	}
+	if ma, ok := fetcher.(*adapter.MicrosoftAdapter); ok {
+		ma.SetAuditMode(true)
+	}
+
+	jobs, err := audit.RunLoader(company.Name, fetcher.FetchJobs)
+	if err != nil {
+		return fmt.Errorf("fetch jobs: %w", err)
+	}
+
+	jobFilter := filter.NewTitleAndLocationFilter(
+		cfg.Filters.TitleKeywords,
+		cfg.Filters.TitleExcludeKeywords,
+		cfg.Filters.Locations,
+		cfg.Filters.ExcludeLocations,
+	)
+	var matched []model.Job
+	for _, j := range jobs {
+		if jobFilter.Match(j) {
+			matched = append(matched, j)
+		}
+	}
+
+	var detailFetcher model.JobDetailFetcher
+	if df, ok := fetcher.(model.JobDetailFetcher); ok {
+		detailFetcher = df
+	}
+
+	_, err = audit.RunAuditTUI(jobs, matched, cfg.Filters, detailFetcher, analyzer)
+	return err
 }
 
 func runAudit(cfg *config.Config, httpClient *http.Client, analyzer poller.JobAnalyzer, logger *slog.Logger) {
