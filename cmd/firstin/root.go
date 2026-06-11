@@ -36,20 +36,25 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging")
 }
 
+func resolveConfigPath(path string) string {
+	if path != "" {
+		return path
+	}
+	if env := os.Getenv("FIRSTIN_CONFIG"); env != "" {
+		return env
+	}
+	if _, err := os.Stat("config.yaml"); err == nil {
+		return "config.yaml"
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".config", "firstin", "config.yaml")
+	}
+	return "config.yaml"
+}
+
 // loadConfig resolves the config path and parses it.
 func loadConfig(path string) (*config.Config, error) {
-	if path == "" {
-		if env := os.Getenv("FIRSTIN_CONFIG"); env != "" {
-			path = env
-		} else if _, err := os.Stat("config.yaml"); err == nil {
-			path = "config.yaml"
-		} else if home, err := os.UserHomeDir(); err == nil {
-			path = filepath.Join(home, ".config", "firstin", "config.yaml")
-		} else {
-			path = "config.yaml"
-		}
-	}
-	return config.Load(path)
+	return config.Load(resolveConfigPath(path))
 }
 
 func setupLogger(dbg bool) *slog.Logger {

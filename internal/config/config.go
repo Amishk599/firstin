@@ -187,6 +187,33 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
+// AppendCompany reads the raw config file at path, appends company, and writes it back.
+// Reads without env-var expansion so existing ${VAR} references are preserved.
+func AppendCompany(path string, company CompanyConfig) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+
+	var raw rawConfig
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
+
+	raw.Companies = append(raw.Companies, company)
+
+	out, err := yaml.Marshal(&raw)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(path, out, 0o644); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+
+	return nil
+}
+
 func validate(cfg *Config) error {
 	if cfg.PollingInterval <= 0 {
 		return fmt.Errorf("polling_interval must be positive, got %v", cfg.PollingInterval)
