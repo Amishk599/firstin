@@ -1,7 +1,7 @@
 polling_interval: 2m
 
 ai:
-  enabled: true                  # enable or disable AI enrichment
+  enabled: false                  # enable or disable AI enrichment
   base_url: ""                   # leave empty to use https://api.openai.com/v1
   model: "gpt-4o-mini"           # OpenAI model
   api_key: "${OPENAI_API_KEY}"   # env var expanded at startup
