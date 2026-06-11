@@ -37,7 +37,6 @@ func init() {
 }
 
 // loadConfig resolves the config path and parses it.
-// Priority: explicit path arg > FIRSTIN_CONFIG env var > ./config.yaml > ~/.config/firstin/config.yaml
 func loadConfig(path string) (*config.Config, error) {
 	if path == "" {
 		if env := os.Getenv("FIRSTIN_CONFIG"); env != "" {

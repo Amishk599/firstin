@@ -352,3 +352,23 @@ companies:
     ats: greenhouse 
     board_token: "twitch"
     enabled: true
+
+  - name: parallel web systems
+    ats: ashby
+    board_token: "parallel"
+    enabled: true
+
+  - name: Sierra
+    ats: ashby
+    board_token: "Sierra"
+    enabled: true
+
+  - name: Traba
+    ats: ashby
+    board_token: "traba"
+    enabled: true
+
+  - name: Pinterest
+    ats: greenhouse 
+    board_token: "pinterest"
+    enabled: true
